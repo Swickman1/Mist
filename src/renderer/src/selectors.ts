@@ -88,7 +88,6 @@ export function formatHours(sec: number): string {
 
 export function sourceLabel(game: Game): string {
   if (!game.source) return 'No source'
-  if (game.shape === 'magnet') return 'Magnet link'
   return game.source.split(/[\\/]/).pop() ?? game.source
 }
 

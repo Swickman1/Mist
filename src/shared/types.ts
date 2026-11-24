@@ -1,11 +1,27 @@
 // Single source of truth for every type shared by main, preload and renderer.
 
-export type SourceShape = 'archive' | 'installer' | 'magnet'
+export const SOURCE_SHAPES = ['archive', 'installer', 'folder'] as const
+export type SourceShape = (typeof SOURCE_SHAPES)[number]
 
 export interface Part {
+  /** Path relative to the source root; also the staged file name. */
   name: string
   sizeBytes: number
+  /** Absolute source path on disk or a share. */
   path?: string
+  /** file:// URL of the source. */
+  url: string
+  /** Natural order within the set (volume order for split archives). */
+  index: number
+  /** Lowercase hex; set from a sidecar checksum or by hashing the source. */
+  sha256?: string
+}
+
+/** Parts pinned for an install, with their hashes. */
+export interface Manifest {
+  version: string
+  parts: Part[]
+  createdAt: number
 }
 
 export interface Game {
@@ -19,6 +35,9 @@ export interface Game {
   source?: string
   shape?: SourceShape
   parts?: Part[]
+  manifest?: Manifest
+  /** TMDB id, metadata only. */
+  tmdbId?: number
   exeHint?: string
   vetted: boolean
   addedAt: number
@@ -32,6 +51,8 @@ export interface Show {
   year: number
   rating: number
   seasons: number[]
+  /** TMDB id, metadata only. */
+  tmdbId?: number
 }
 
 export interface Episode {

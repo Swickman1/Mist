@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import type { SourceShape } from '../../../shared/types'
+import { SOURCE_SHAPES, type SourceShape } from '../../../shared/types'
 import { api } from '../store'
-
-const SHAPES: SourceShape[] = ['archive', 'installer', 'magnet']
 
 export interface SourceDraft {
   input: string
@@ -19,7 +17,7 @@ export function SourceFields({ draft, onChange }: { draft: SourceDraft; onChange
     const file = event.dataTransfer.files[0]
     if (!file) return
     const path = api.pathForFile(file)
-    const shape: SourceShape = /\.(exe|msi)$/i.test(path) ? 'installer' : 'archive'
+    const shape: SourceShape = /\.(exe|msi)$/i.test(path) ? 'installer' : /\.(rar|7z|zip|r\d\d|\d{3})$/i.test(path) ? 'archive' : 'folder'
     onChange({ input: path, shape })
   }
 
@@ -28,15 +26,15 @@ export function SourceFields({ draft, onChange }: { draft: SourceDraft; onChange
       <input
         className="field"
         value={draft.input}
-        placeholder="Paste a path or magnet link"
+        placeholder="Paste a file, folder or share path"
         aria-label="Source"
         onChange={(e) => {
           const input = e.target.value
-          onChange({ input, shape: input.startsWith('magnet:') ? 'magnet' : draft.shape })
+          onChange({ ...draft, input })
         }}
       />
       <div className="segmented" role="radiogroup" aria-label="Source shape">
-        {SHAPES.map((shape) => (
+        {SOURCE_SHAPES.map((shape) => (
           <button
             key={shape}
             role="radio"

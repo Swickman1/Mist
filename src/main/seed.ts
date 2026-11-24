@@ -28,21 +28,22 @@ interface GameSeed {
   source?: string
   shape?: SourceShape
   vetted: boolean
+  tmdbId: number
 }
 
 const GAME_SEEDS: GameSeed[] = [
-  { title: 'Hollow Orbit', version: '1.4.2', sizeGb: 38.2, vetted: true, shape: 'archive', source: 'D:\\Archive\\Games\\HollowOrbit-1.4.2.7z', description: 'A slow, lonely survival sim aboard a derelict ring station. Scavenge, patch the hull, and decide what to keep powered as the orbit decays.' },
-  { title: 'Saltmarsh', version: '0.9.7', sizeGb: 6.4, vetted: true, shape: 'installer', source: 'D:\\Archive\\Installers\\Saltmarsh_setup_0.9.7.exe', description: 'Tidal farming and quiet trade between three fishing villages. Seasons turn on the moon, not the calendar.' },
-  { title: 'Cinder Protocol', version: '2.1.0', sizeGb: 71.9, vetted: true, shape: 'archive', source: '\\\\nas\\games\\cinder-protocol-2.1.0.zip', description: 'Squad tactics in a city that burns a little more every turn. Fire spreads, smoke blinds, and nothing you build lasts.' },
-  { title: 'Tidewright', version: '1.0.3', sizeGb: 12.8, vetted: true, shape: 'installer', source: 'E:\\Backups\\tidewright-setup.exe', description: 'Shipbuilding puzzler. Every plank is simulated, every leak is your fault.' },
-  { title: 'Lantern Keep', version: '3.2.1', sizeGb: 22.5, vetted: false, shape: 'archive', source: 'D:\\Archive\\Games\\LanternKeep-3.2.1.7z', description: 'A roguelite about keeping one light lit through an endless night. Rooms rearrange whenever the flame gutters.' },
-  { title: 'Quiet Engines', version: '1.1.0', sizeGb: 4.1, vetted: true, shape: 'installer', source: 'D:\\Archive\\Installers\\QuietEngines_1.1.0.exe', description: 'Factory automation with a strict noise budget. Machines that run too loud wake the neighbours.' },
-  { title: 'Paper Kingdoms', version: '0.4.0', sizeGb: 2.3, vetted: true, shape: 'archive', source: 'D:\\Archive\\Games\\PaperKingdoms-0.4.0.zip', description: 'Fold, cut and stack paper provinces into a working realm. Rain is a natural disaster.' },
-  { title: 'Northbound', version: '2.0.5', sizeGb: 54.7, vetted: true, shape: 'magnet', source: 'magnet:?xt=urn:btih:5f2c0e8f1a7b4d3c9e6a2b8d0f4c1e7a9b3d5f2c&dn=Northbound-2.0.5', description: 'An overland expedition across a frozen continent. Ration, navigate, and keep the dogs fed.' },
-  { title: 'Glasswing', version: '1.3.0', sizeGb: 18.9, vetted: true, shape: 'archive', source: '\\\\nas\\games\\glasswing-1.3.0.7z', description: 'A flight game about a courier moth carrying letters across a city of greenhouses.' },
-  { title: 'Rust & Rhyme', version: '1.0.0', sizeGb: 9.6, vetted: false, shape: 'installer', source: 'E:\\Backups\\rust-and-rhyme-setup.exe', description: 'A rhythm brawler where a scrapyard band fights its way to the county fair.' },
-  { title: 'Low Tide Racing', version: '0.8.2', sizeGb: 7.7, vetted: false, description: 'Arcade racing on sandbars that only exist between tides. Miss the window and the track is gone.' },
-  { title: 'Vault Seventeen', version: '1.2.4', sizeGb: 31.0, vetted: true, description: 'A heist planner. Spend days casing the vault, then watch the plan unravel in under four minutes.' }
+  { tmdbId: 1004211, title: 'Hollow Orbit', version: '1.4.2', sizeGb: 38.2, vetted: true, shape: 'archive', source: 'D:\\Archive\\Games\\HollowOrbit-1.4.2.7z', description: 'A slow, lonely survival sim aboard a derelict ring station. Scavenge, patch the hull, and decide what to keep powered as the orbit decays.' },
+  { tmdbId: 1004987, title: 'Saltmarsh', version: '0.9.7', sizeGb: 6.4, vetted: true, shape: 'installer', source: 'D:\\Archive\\Installers\\Saltmarsh_setup_0.9.7.exe', description: 'Tidal farming and quiet trade between three fishing villages. Seasons turn on the moon, not the calendar.' },
+  { tmdbId: 1005302, title: 'Cinder Protocol', version: '2.1.0', sizeGb: 71.9, vetted: true, shape: 'archive', source: '\\\\nas\\games\\cinder-protocol-2.1.0.zip', description: 'Squad tactics in a city that burns a little more every turn. Fire spreads, smoke blinds, and nothing you build lasts.' },
+  { tmdbId: 1005618, title: 'Tidewright', version: '1.0.3', sizeGb: 12.8, vetted: true, shape: 'installer', source: 'E:\\Backups\\tidewright-setup.exe', description: 'Shipbuilding puzzler. Every plank is simulated, every leak is your fault.' },
+  { tmdbId: 1006045, title: 'Lantern Keep', version: '3.2.1', sizeGb: 22.5, vetted: false, shape: 'archive', source: 'D:\\Archive\\Games\\LanternKeep-3.2.1.7z', description: 'A roguelite about keeping one light lit through an endless night. Rooms rearrange whenever the flame gutters.' },
+  { tmdbId: 1006391, title: 'Quiet Engines', version: '1.1.0', sizeGb: 4.1, vetted: true, shape: 'installer', source: 'D:\\Archive\\Installers\\QuietEngines_1.1.0.exe', description: 'Factory automation with a strict noise budget. Machines that run too loud wake the neighbours.' },
+  { tmdbId: 1006720, title: 'Paper Kingdoms', version: '0.4.0', sizeGb: 2.3, vetted: true, shape: 'archive', source: 'D:\\Archive\\Games\\PaperKingdoms-0.4.0.zip', description: 'Fold, cut and stack paper provinces into a working realm. Rain is a natural disaster.' },
+  { tmdbId: 1007134, title: 'Northbound', version: '2.0.5', sizeGb: 54.7, vetted: true, shape: 'folder', source: '\\\\nas\\games\\Northbound-2.0.5', description: 'An overland expedition across a frozen continent. Ration, navigate, and keep the dogs fed.' },
+  { tmdbId: 1007509, title: 'Glasswing', version: '1.3.0', sizeGb: 18.9, vetted: true, shape: 'archive', source: '\\\\nas\\games\\glasswing-1.3.0.7z', description: 'A flight game about a courier moth carrying letters across a city of greenhouses.' },
+  { tmdbId: 1007852, title: 'Rust & Rhyme', version: '1.0.0', sizeGb: 9.6, vetted: false, shape: 'installer', source: 'E:\\Backups\\rust-and-rhyme-setup.exe', description: 'A rhythm brawler where a scrapyard band fights its way to the county fair.' },
+  { tmdbId: 1008266, title: 'Low Tide Racing', version: '0.8.2', sizeGb: 7.7, vetted: false, description: 'Arcade racing on sandbars that only exist between tides. Miss the window and the track is gone.' },
+  { tmdbId: 1008613, title: 'Vault Seventeen', version: '1.2.4', sizeGb: 31.0, vetted: true, description: 'A heist planner. Spend days casing the vault, then watch the plan unravel in under four minutes.' }
 ]
 
 interface ShowSeed {
@@ -52,17 +53,18 @@ interface ShowSeed {
   seasons: number
   episodesPerSeason: number
   minutes: number
+  tmdbId: number
 }
 
 const SHOW_SEEDS: ShowSeed[] = [
-  { title: 'The Long Shift', year: 2021, rating: 8.4, seasons: 2, episodesPerSeason: 8, minutes: 48 },
-  { title: 'Harbor Lights', year: 2019, rating: 7.9, seasons: 3, episodesPerSeason: 6, minutes: 42 },
-  { title: 'Marrow', year: 2023, rating: 8.8, seasons: 1, episodesPerSeason: 8, minutes: 55 },
-  { title: 'Static Season', year: 2020, rating: 7.2, seasons: 2, episodesPerSeason: 10, minutes: 24 },
-  { title: 'Copper Coast', year: 2018, rating: 8.1, seasons: 2, episodesPerSeason: 6, minutes: 58 },
-  { title: 'Small Hours', year: 2022, rating: 7.6, seasons: 1, episodesPerSeason: 1, minutes: 104 },
-  { title: 'Orbiters', year: 2024, rating: 8.0, seasons: 2, episodesPerSeason: 6, minutes: 46 },
-  { title: 'The Cartographers', year: 2017, rating: 7.4, seasons: 1, episodesPerSeason: 1, minutes: 121 }
+  { tmdbId: 94605, title: 'The Long Shift', year: 2021, rating: 8.4, seasons: 2, episodesPerSeason: 8, minutes: 48 },
+  { tmdbId: 71912, title: 'Harbor Lights', year: 2019, rating: 7.9, seasons: 3, episodesPerSeason: 6, minutes: 42 },
+  { tmdbId: 215103, title: 'Marrow', year: 2023, rating: 8.8, seasons: 1, episodesPerSeason: 8, minutes: 55 },
+  { tmdbId: 119051, title: 'Static Season', year: 2020, rating: 7.2, seasons: 2, episodesPerSeason: 10, minutes: 24 },
+  { tmdbId: 88329, title: 'Copper Coast', year: 2018, rating: 8.1, seasons: 2, episodesPerSeason: 6, minutes: 58 },
+  { tmdbId: 736526, title: 'Small Hours', year: 2022, rating: 7.6, seasons: 1, episodesPerSeason: 1, minutes: 104 },
+  { tmdbId: 204154, title: 'Orbiters', year: 2024, rating: 8.0, seasons: 2, episodesPerSeason: 6, minutes: 46 },
+  { tmdbId: 592695, title: 'The Cartographers', year: 2017, rating: 7.4, seasons: 1, episodesPerSeason: 1, minutes: 121 }
 ]
 
 const EPISODE_WORDS = ['Arrival', 'Undertow', 'Glass', 'The Ledger', 'Northern Line', 'Lamps', 'Second Watch', 'Ballast', 'Dead Reckoning', 'Salt', 'Low Light', 'Return']
@@ -85,6 +87,7 @@ export function buildSeed(now: number): SeedData {
       source: seed.source,
       shape: seed.shape,
       exeHint: `${seed.title.replace(/[^A-Za-z0-9]/g, '')}.exe`,
+      tmdbId: seed.tmdbId,
       vetted: seed.vetted,
       addedAt: now - (i + 1) * 3 * DAY
     }
@@ -99,7 +102,8 @@ export function buildSeed(now: number): SeedData {
       hero: makeArt(`${id}-hero`, { width: 2100, height: 900 }),
       year: seed.year,
       rating: seed.rating,
-      seasons: Array.from({ length: seed.seasons }, (_, s) => s + 1)
+      seasons: Array.from({ length: seed.seasons }, (_, s) => s + 1),
+      tmdbId: seed.tmdbId
     }
   })
 
@@ -210,8 +214,7 @@ export function defaultSettings(): Settings {
     sources: [
       { id: 'local', name: 'Local folders', enabled: true },
       { id: 'nas', name: 'NAS share (\\\\nas\\games)', enabled: true },
-      { id: 'removable', name: 'Removable drives', enabled: true },
-      { id: 'magnet', name: 'Magnet links', enabled: false }
+      { id: 'removable', name: 'Removable drives', enabled: true }
     ],
     cacheBytes: Math.round(1.7 * GB),
     theme: 'mist'

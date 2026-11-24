@@ -3,7 +3,7 @@
 import type { Part, SourceShape } from '../shared/types'
 import { archiveResolver } from './archive'
 import { installerResolver } from './installer'
-import { magnetResolver } from './magnet'
+import { folderResolver } from './folder'
 
 export interface SourceEntry {
   gameId: string
@@ -18,7 +18,7 @@ export interface Resolver {
 const resolvers: Record<SourceShape, Resolver> = {
   archive: archiveResolver,
   installer: installerResolver,
-  magnet: magnetResolver
+  folder: folderResolver
 }
 
 export function resolverFor(shape: SourceShape): Resolver {

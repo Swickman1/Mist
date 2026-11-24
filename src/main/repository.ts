@@ -1,6 +1,6 @@
 // Local SQLite persistence. Each entity lives in its own document table.
 import Database from 'better-sqlite3'
-import { THEMES, type Episode, type Game, type LibraryEntry, type Settings, type Show } from '../shared/types'
+import { SOURCE_SHAPES, THEMES, type Episode, type Game, type LibraryEntry, type Settings, type Show } from '../shared/types'
 import { buildSeed, defaultSettings, type SeededJob } from './seed'
 
 class DocTable<T extends { id: string }> {
@@ -69,6 +69,21 @@ export class Repository {
     this.settingsTable = new DocTable(this.db, 'settings')
     if (this.games.all().length === 0) this.seed()
     this.migrateTheme()
+    this.migrateSourceShapes()
+  }
+
+  /** 'magnet' is no longer a source shape: drop that source and its settings toggle. */
+  private migrateSourceShapes(): void {
+    this.transaction(() => {
+      for (const game of this.games.all()) {
+        if (game.shape === undefined || SOURCE_SHAPES.includes(game.shape)) continue
+        const { source: _source, shape: _shape, parts: _parts, ...rest } = game
+        this.games.put(rest)
+      }
+      const settings = this.settings
+      const sources = settings.sources.filter((s) => s.id !== 'magnet')
+      if (sources.length !== settings.sources.length) this.settings = { ...settings, sources }
+    })
   }
 
   /** Databases from before the mist theme stored 'dark' / 'near-black'. */
