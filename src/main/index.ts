@@ -9,14 +9,21 @@ import { MistService } from './service'
 const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 let mainWindow: BrowserWindow | undefined
 
-/** Mist makes no network requests. Anything that is not local is cancelled and logged. */
+/** Local protocols Mist always serves from disk or memory. */
+const LOCAL_PROTOCOLS = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:']
+
+/** The only remote hosts Mist may reach, over https, for title metadata and artwork. */
+export const ALLOWED_HTTPS_HOSTS = ['image.tmdb.org', 'api.themoviedb.org']
+
+/** Everything outside the local protocols, the dev server and the allowlist is cancelled and logged. */
 function blockNetwork(): void {
   const devOrigin = devServerUrl ? new URL(devServerUrl) : undefined
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url)
-    const local = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:'].includes(url.protocol)
+    const local = LOCAL_PROTOCOLS.includes(url.protocol)
     const devServer = devOrigin !== undefined && url.host === devOrigin.host && ['http:', 'ws:'].includes(url.protocol)
-    const allowed = local || devServer
+    const metadata = url.protocol === 'https:' && ALLOWED_HTTPS_HOSTS.includes(url.hostname)
+    const allowed = local || devServer || metadata
     if (!allowed) console.warn(`[mist] blocked network request: ${details.url}`)
     callback({ cancel: !allowed })
   })
