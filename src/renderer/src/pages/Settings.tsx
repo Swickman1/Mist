@@ -119,6 +119,25 @@ export function Settings() {
       </section>
 
       <section className="settings-group">
+        <h2 className="section__title">Startup</h2>
+        <Row
+          label="Launch at login"
+          hint={snapshot.startup.available ? 'Start Mist when you sign in to Windows' : 'Available in the installed app, not in dev mode'}
+        >
+          <label className="toggle">
+            <input
+              type="checkbox"
+              disabled={!snapshot.startup.available}
+              checked={snapshot.startup.enabled}
+              onChange={() => api.setLaunchAtLogin(!snapshot.startup.enabled)}
+            />
+            <span className="toggle__box" />
+            {snapshot.startup.enabled ? 'On' : 'Off'}
+          </label>
+        </Row>
+      </section>
+
+      <section className="settings-group">
         <h2 className="section__title">Appearance</h2>
         <Row label="Theme" hint="Mist has drifting fog; Midnight is darker and still">
           <div className="segmented" role="radiogroup" aria-label="Theme">

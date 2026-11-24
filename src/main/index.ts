@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { IPC, MIST_METHODS, READ_ONLY_METHODS, type MistMethod, type Theme } from '../shared/types'
-import { titleBarOverlay, windowBackground } from './chrome'
+import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome'
 import { JobRunner } from './jobRunner'
 import { Repository } from './repository'
 import { MistService } from './service'
@@ -33,6 +33,7 @@ function createWindow(theme: Theme): BrowserWindow {
     backgroundColor: windowBackground(theme),
     show: false,
     title: 'Mist',
+    icon: appIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -47,6 +48,18 @@ function createWindow(theme: Theme): BrowserWindow {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
   return win
 }
+
+// One Mist at a time: a second launch focuses the existing window.
+if (!app.requestSingleInstanceLock()) app.exit(0)
+
+app.setAppUserModelId(APP_ID)
+
+app.on('second-instance', () => {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+})
 
 app.whenReady().then(() => {
   blockNetwork()

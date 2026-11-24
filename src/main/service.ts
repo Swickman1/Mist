@@ -1,5 +1,5 @@
 // MistService: every renderer call lands here. Owns the repository and job runner.
-import { BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import type { ActionResult, LibraryEntry, MistCalls, Settings, Snapshot, SourceShape } from '../shared/types'
 import { resolverFor } from '../sources'
 import { sha256File } from '../verify'
@@ -24,7 +24,8 @@ export class MistService implements MistCalls {
       jobs: this.runner.jobs(),
       settings: this.repo.settings,
       watchlist: this.repo.watchlist.all().map((row) => row.id),
-      appVersion: this.appVersion
+      appVersion: this.appVersion,
+      startup: { available: app.isPackaged, enabled: app.isPackaged && app.getLoginItemSettings().openAtLogin }
     }
   }
 
@@ -147,6 +148,11 @@ export class MistService implements MistCalls {
 
   clearCache(): void {
     this.updateSettings({ cacheBytes: 0 })
+  }
+
+  setLaunchAtLogin(enabled: boolean): void {
+    if (!app.isPackaged) return
+    app.setLoginItemSettings({ openAtLogin: enabled })
   }
 
   async pickFolder(): Promise<string | null> {

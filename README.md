@@ -41,3 +41,11 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 - Main: `session.webRequest.onBeforeRequest` cancels anything that is not `file:`/`data:`/`blob:`/`devtools:` (or the local dev server in `npm run dev`) and logs `[mist] blocked network request`.
 - Renderer: CSP `default-src 'self'`, images only `self`/`data:`/`blob:`.
 - Window opens and navigations are denied. Verified: `fetch('https://example.com')` and a remote `<img>` both fail inside the app.
+
+## Icon & install
+
+- Icon masters: `build/icon.svg` (full) and `build/icon-small.svg` (16–32px). `npm run icons` renders `build/icon.ico` + `icon.png`. The title-bar logo imports the same SVG.
+- `npm run dist` → `dist/Mist Setup <version>.exe`: per-user NSIS installer to `%LOCALAPPDATA%\Programs\Mist`, with Start menu + desktop shortcuts (searchable in Windows). Uninstall from Windows Settings → Apps.
+- App id `com.mist.launcher` (matches `build.appId`) for taskbar grouping; a single instance only (a second launch focuses the open window).
+- Settings → Startup → **Launch at login** (installed app only).
+- **Build gotcha:** without Windows Developer Mode, electron-builder fails extracting `winCodeSign` (macOS symlinks). Fix: extract the cached `.7z` with `7za x -y` into `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0` and rerun.

@@ -107,6 +107,12 @@ export interface Settings {
   theme: Theme
 }
 
+/** Launch-at-login is OS state; only a packaged install can register itself. */
+export interface StartupState {
+  available: boolean
+  enabled: boolean
+}
+
 export interface Snapshot {
   games: Game[]
   shows: Show[]
@@ -116,6 +122,7 @@ export interface Snapshot {
   settings: Settings
   watchlist: string[]
   appVersion: string
+  startup: StartupState
 }
 
 export interface ActionResult {
@@ -147,6 +154,7 @@ export interface MistCalls {
   updateSettings(patch: Partial<Settings>): void
   clearCache(): void
   pickFolder(): Promise<string | null>
+  setLaunchAtLogin(enabled: boolean): void
 }
 
 export type MistMethod = keyof MistCalls
@@ -173,7 +181,8 @@ export const MIST_METHODS = [
   'toggleWatchlist',
   'updateSettings',
   'clearCache',
-  'pickFolder'
+  'pickFolder',
+  'setLaunchAtLogin'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
