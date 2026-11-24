@@ -29,7 +29,7 @@ export function App() {
   } as React.CSSProperties
 
   return (
-    <HashRouter>
+    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="app" style={layoutVars}>
         <Fog />
         <TitleBar />

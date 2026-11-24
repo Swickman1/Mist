@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs'
 import { applyChrome } from './chrome'
 import { launchGame } from './install'
 import { indexShow } from './media'
+import { backupSaves } from './saves'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
 
@@ -120,9 +121,17 @@ export class MistService implements MistCalls {
     }
   }
 
-  backupSaves(gameId: string): ActionResult {
+  async backupSaves(gameId: string): Promise<ActionResult> {
     const game = this.repo.games.get(gameId)!
-    return { ok: false, message: `Backing up ${game.title} saves to ${this.repo.settings.saveBackupPath} is not implemented yet` }
+    const roots = { Documents: app.getPath('documents'), AppData: app.getPath('appData'), LocalAppData: process.env['LOCALAPPDATA']! }
+    try {
+      const result = await backupSaves(gameId, this.repo.settings.saveBackupPath, roots, () => this.pickFolder())
+      if (!result) return { ok: false, message: 'Backup cancelled' }
+      if (result.count === 0) return { ok: false, message: `No ${game.title} save files found in their usual folders` }
+      return { ok: true, message: `Backed up ${result.count} file(s) to ${result.destination}` }
+    } catch (error) {
+      return { ok: false, message: `Backup failed: ${(error as Error).message}` }
+    }
   }
 
   pauseJob(jobId: string): void {

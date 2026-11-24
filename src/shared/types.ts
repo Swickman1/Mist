@@ -165,7 +165,7 @@ export interface MistCalls {
   install(gameId: string): void
   setSource(gameId: string, input: string, shape: SourceShape): Promise<ActionResult>
   verifyGame(gameId: string): Promise<ActionResult>
-  backupSaves(gameId: string): ActionResult
+  backupSaves(gameId: string): Promise<ActionResult>
   pauseJob(jobId: string): void
   resumeJob(jobId: string): void
   cancelJob(jobId: string): void
