@@ -503,82 +503,175 @@ img {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.grid--stills {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
 .grid--dense {
   grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
   gap: 20px 14px;
 }
 
-/* ---------- Library column (Games) ---------- */
+/* ---------- Games catalog ---------- */
 
-.games-layout {
+.grid--catalog {
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 24px 16px;
+}
+
+.spotlight {
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr);
-  height: 100%;
+  grid-template-columns: minmax(0, 1fr) 176px;
+  gap: 12px;
+  margin-bottom: 40px;
 }
 
-/* The library column runs full height; each pane reserves the bar itself. */
-.main:has(.games-layout) {
+.spotlight__main {
+  position: relative;
+  height: 340px;
+  border-radius: var(--radius);
   overflow: hidden;
-  padding-bottom: 0;
+  text-align: left;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border);
 }
 
-.games-layout__view {
-  overflow-y: auto;
-  min-width: 0;
-  padding-bottom: var(--bar-reserve);
+.spotlight__main:hover .spotlight__art {
+  transform: scale(1.03);
 }
 
-.gamelist {
+.spotlight__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 600ms ease;
+  animation: spotlight-in 500ms ease;
+}
+
+@keyframes spotlight-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.spotlight__fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10, 15, 20, 0.92) 0%, rgba(10, 15, 20, 0.55) 45%, rgba(10, 15, 20, 0) 75%);
+}
+
+.spotlight__content {
+  position: absolute;
+  left: 32px;
+  bottom: 32px;
+  max-width: 440px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  background: rgba(10, 15, 20, 0.45);
-  border-right: 1px solid var(--border);
-}
-
-.gamelist__head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 8px 8px 12px;
-}
-
-.gamelist__home {
-  flex: 1;
-  display: flex;
-  align-items: center;
   gap: 8px;
-  height: 32px;
-  padding: 0 8px;
-  border-radius: var(--radius);
-  color: var(--text-2);
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1px;
+}
+
+.spotlight__eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
   text-transform: uppercase;
 }
 
-.gamelist__home:hover,
-.gamelist__home.is-active {
-  color: var(--text);
-  background: var(--surface-hover);
+.spotlight__title {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 40px;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
 }
 
-.gamelist__filter {
+.spotlight__desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.spotlight__meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.spotlight__thumbs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.spotlight__thumb {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  opacity: 0.5;
+  box-shadow: 0 0 0 1px var(--border);
+  transition: opacity 160ms ease, box-shadow 160ms ease;
+}
+
+.spotlight__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.spotlight__thumb:hover {
+  opacity: 0.8;
+}
+
+.spotlight__thumb.is-active {
+  opacity: 1;
+  box-shadow: 0 0 0 1px var(--accent), 0 0 16px var(--accent-glow);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.toolbar .section__title {
+  margin: 0;
+}
+
+.toolbar__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toolbar__search {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 28px;
-  margin: 0 12px 8px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
+  width: 200px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: rgba(20, 29, 38, 0.8);
+  background: rgba(8, 12, 16, 0.5);
   color: var(--text-3);
 }
 
-.gamelist__filter input {
+.toolbar__search input {
   flex: 1;
   min-width: 0;
   background: none;
@@ -589,89 +682,23 @@ img {
   font-size: 12px;
 }
 
-.gamelist__scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 4px calc(16px + var(--bar-reserve)) 8px;
+.toolbar .segmented button {
+  text-transform: none;
 }
 
-.gamelist__group {
-  margin: 12px 4px 4px;
-  color: var(--text-3);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-}
-
-.gamelist ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.gamelist__row {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 8px 0 4px;
+.select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
+  background: #131c25;
   color: var(--text);
-  text-decoration: none;
-  font-size: 13px;
-}
-
-.gamelist__row img {
-  width: 20px;
-  height: 20px;
-  object-fit: cover;
-  border-radius: 2px;
-}
-
-.gamelist__row:hover {
-  background: var(--surface-hover);
-}
-
-.gamelist__row.is-active {
-  background: linear-gradient(90deg, rgba(159, 227, 196, 0.2), rgba(143, 183, 217, 0.1));
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
-.gamelist__row--missing,
-.gamelist__row--catalog {
-  color: var(--text-2);
-}
-
-.gamelist__row--missing img,
-.gamelist__row--catalog img {
-  opacity: 0.5;
-  filter: grayscale(0.6);
-}
-
-.gamelist__row--installed .gamelist__title {
-  color: var(--text);
-}
-
-.gamelist__title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gamelist__row > span:last-child:not(.gamelist__title) {
-  font-size: 11px;
-}
-
-.gamelist__pct {
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-
-.gamelist__empty {
-  padding: 16px 8px;
+  font: inherit;
   font-size: 12px;
+}
+
+.chip--state.chip--inline {
+  position: static;
 }
 
 /* ---------- Capsules ---------- */

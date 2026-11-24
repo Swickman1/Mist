@@ -20,6 +20,7 @@ export function Rail() {
   return (
     <nav className={`rail${railCollapsed ? ' is-collapsed' : ''}`} aria-label="Primary">
       <RailItem to="/" end icon="home" label="Home" />
+      <RailItem to="/library" icon="library" label="Library" />
       <RailItem to="/games" icon="games" label="Games" />
       <RailItem to="/shows" icon="shows" label="Shows & Movies" />
       <div className="rail__divider" />

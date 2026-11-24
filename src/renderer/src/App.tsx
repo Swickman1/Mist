@@ -10,8 +10,8 @@ import { ui } from './config'
 import { Downloads } from './pages/Downloads'
 import { GamePage } from './pages/GamePage'
 import { Games } from './pages/Games'
-import { GamesLayout } from './pages/GamesLayout'
 import { Home } from './pages/Home'
+import { Library } from './pages/Library'
 import { Settings } from './pages/Settings'
 import { ShowPage } from './pages/ShowPage'
 import { Shows } from './pages/Shows'
@@ -38,10 +38,9 @@ export function App() {
           <main className="main">
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/games" element={<GamesLayout />}>
-                <Route index element={<Games />} />
-                <Route path=":id" element={<GamePage />} />
-              </Route>
+              <Route path="/library" element={<Library />} />
+              <Route path="/games" element={<Games />} />
+              <Route path="/games/:id" element={<GamePage />} />
               <Route path="/shows" element={<Shows />} />
               <Route path="/shows/:id" element={<ShowPage />} />
               <Route path="/downloads" element={<Downloads />} />

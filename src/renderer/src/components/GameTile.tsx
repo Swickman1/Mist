@@ -4,12 +4,12 @@ import { formatPercent, tileState, type TileState } from '../selectors'
 import { api, useMist } from '../store'
 import { Icon } from './Icon'
 
-export function StateChip({ state, job }: { state: TileState; job?: DownloadJob }) {
+export function StateChip({ state, job, inline }: { state: TileState; job?: DownloadJob; inline?: boolean }) {
   const label = state === 'downloading' && job ? `DOWNLOADING ${formatPercent(job.progress)}` : state.toUpperCase()
-  return <span className={`chip chip--state chip--${state}`}>{label}</span>
+  return <span className={`chip chip--state chip--${state}${inline ? ' chip--inline' : ''}`}>{label}</span>
 }
 
-export function GameTile({ game, entry, job }: { game: Game; entry?: LibraryEntry; job?: DownloadJob }) {
+export function GameTile({ game, entry, job, meta }: { game: Game; entry?: LibraryEntry; job?: DownloadJob; meta?: string }) {
   const navigate = useNavigate()
   const { notify } = useMist()
   const state = entry ? tileState(entry, job) : undefined
@@ -36,6 +36,7 @@ export function GameTile({ game, entry, job }: { game: Game; entry?: LibraryEntr
         </span>
       </button>
       <span className="tile__title">{game.title}</span>
+      {meta && <span className="tile__meta muted">{meta}</span>}
     </div>
   )
 }
