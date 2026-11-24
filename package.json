@@ -1,0 +1,33 @@
+{
+  "name": "mist",
+  "productName": "Mist",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline-first catalog and launcher for locally owned games and shows.",
+  "main": "out/main/index.js",
+  "scripts": {
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.11.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "3.7.1",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.10.1",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "electron": "33.4.11",
+    "electron-vite": "2.3.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  }
+}
