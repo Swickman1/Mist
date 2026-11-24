@@ -1,7 +1,9 @@
 // Local SQLite persistence. Each entity lives in its own document table.
 import Database from 'better-sqlite3'
-import { SOURCE_SHAPES, THEMES, type Episode, type Game, type LibraryEntry, type Settings, type Show } from '../shared/types'
-import { buildSeed, defaultSettings, type SeededJob } from './seed'
+import { existsSync } from 'node:fs'
+import { parse } from 'node:path'
+import { SOURCE_SHAPES, THEMES, type Episode, type Game, type LibraryEntry, type Settings, type Show, type DownloadJob } from '../shared/types'
+import { buildSeed, defaultPaths, defaultSettings } from './seed'
 
 class DocTable<T extends { id: string }> {
   private readonly selectAll: Database.Statement<[], { data: string }>
@@ -53,11 +55,14 @@ export class Repository {
   readonly shows: DocTable<Show>
   readonly episodes: DocTable<Episode>
   readonly library: DocTable<LibraryEntry>
-  readonly jobs: DocTable<SeededJob>
+  readonly jobs: DocTable<DownloadJob>
   readonly watchlist: DocTable<{ id: string }>
   private readonly settingsTable: DocTable<SettingsDoc>
 
-  constructor(file: string) {
+  constructor(
+    file: string,
+    private readonly homeDir: string
+  ) {
     this.db = new Database(file)
     this.db.pragma('journal_mode = WAL')
     this.games = new DocTable(this.db, 'games')
@@ -70,6 +75,16 @@ export class Repository {
     if (this.games.all().length === 0) this.seed()
     this.migrateTheme()
     this.migrateSourceShapes()
+    this.migratePaths()
+  }
+
+  /** Folder settings on a drive that does not exist (the old D: defaults) move to the home-based defaults. */
+  private migratePaths(): void {
+    const settings = this.settings
+    const defaults = defaultPaths(this.homeDir)
+    const keys = ['libraryPath', 'stagingPath', 'saveBackupPath'] as const
+    const broken = keys.filter((key) => !existsSync(parse(settings[key]).root))
+    if (broken.length) this.settings = { ...settings, ...Object.fromEntries(broken.map((key) => [key, defaults[key]])) }
   }
 
   /** 'magnet' is no longer a source shape: drop that source and its settings toggle. */
@@ -116,7 +131,7 @@ export class Repository {
       data.library.forEach((row) => this.library.put(row))
       data.jobs.forEach((row) => this.jobs.put(row))
       this.watchlist.put({ id: 's-copper-coast' })
-      this.settings = defaultSettings()
+      this.settings = defaultSettings(this.homeDir)
     })
   }
 }

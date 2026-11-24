@@ -1,41 +1,69 @@
-// Fake download runner: advances jobs through every JobState on a timer so the UI
-// is genuinely exercised. Seeded faults make one job stall and one fail its hash check.
-import { RUNNING_STATES, VISIBLE_STATES, type DownloadJob, type JobState } from '../shared/types'
+// JobRunner: schedules jobs into download slots and drives each one through a real
+// pipeline: resolving (resolve parts + pin hashes) → downloading (Transfer copies
+// with resume) → verifying (per-part hash) → extracting (install) → ready.
+// The tick turns live byte counts into progress and speed.
+import { join } from 'node:path'
+import { RUNNING_STATES, VISIBLE_STATES, type DownloadJob, type Game, type JobState, type Manifest } from '../shared/types'
+import { resolverFor } from '../sources'
+import { sha256File } from '../verify'
 import type { Repository } from './repository'
-import type { SeededJob } from './seed'
+import { clearStaging, Transfer, type TransferPhase } from './transfer'
 
 const TICK_MS = 500
-const DOWNLOAD_SECONDS = 18
-const PHASE_MS: Partial<Record<JobState, number>> = { resolving: 1500, verifying: 2000, extracting: 2500 }
-const STALL_AT_PROGRESS = 0.4
-const STALL_RECOVER_MS = 15_000
+/** Weight of the newest speed sample in the smoothed speed. */
+const SPEED_SMOOTHING = 0.35
+
+/** Paused or cancelled: the pipeline stops quietly and keeps the state its caller set. */
+class Interrupted extends Error {}
+
+interface LiveJob {
+  controller: AbortController
+  transfer?: Transfer
+  bytesDone: number
+  sampledBytes: number
+  sampledAt: number
+}
+
+export interface InstallResult {
+  path: string
+  exeHint?: string
+}
+
+/** Turns a fully staged, verified game into an installed library folder. */
+export type Installer = (game: Game, stagingDir: string, signal: AbortSignal) => Promise<InstallResult>
+
+const PHASE_STATE: Record<TransferPhase, JobState> = { copying: 'downloading', verifying: 'verifying', stalled: 'stalled' }
 
 export class JobRunner {
-  private readonly phaseStartedAt = new Map<string, number>()
+  private readonly live = new Map<string, LiveJob>()
   private timer: NodeJS.Timeout | undefined
-  private lastTick = Date.now()
 
   constructor(
     private readonly repo: Repository,
+    private readonly install: Installer,
     private readonly onJobsChanged: (jobs: DownloadJob[]) => void,
     private readonly onLibraryChanged: () => void
   ) {}
 
   start(): void {
-    // Jobs interrupted by a quit resume from the queue.
+    // Jobs interrupted by a quit go back to the queue and resume from what is staged.
     for (const job of this.repo.jobs.all()) {
-      if (RUNNING_STATES.includes(job.state)) this.repo.jobs.put({ ...job, state: 'queued', speedBps: 0 })
+      if (RUNNING_STATES.includes(job.state) || job.state === 'stalled') this.repo.jobs.put({ ...job, state: 'queued', speedBps: 0 })
     }
-    this.lastTick = Date.now()
     this.timer = setInterval(() => this.tick(), TICK_MS)
   }
 
   stop(): void {
     clearInterval(this.timer)
+    for (const live of this.live.values()) live.controller.abort(new Interrupted('quit'))
   }
 
   jobs(): DownloadJob[] {
-    return this.repo.jobs.all().map(({ fault: _fault, ...job }) => job)
+    return this.repo.jobs.all()
+  }
+
+  stagingDir(gameId: string): string {
+    return join(this.repo.settings.stagingPath, gameId)
   }
 
   enqueue(gameId: string): void {
@@ -61,29 +89,24 @@ export class JobRunner {
   }
 
   pause(jobId: string): void {
-    this.update(jobId, ['queued', 'stalled', ...RUNNING_STATES], { state: 'paused', speedBps: 0 })
+    if (this.patch(jobId, ['queued', 'stalled', ...RUNNING_STATES], { state: 'paused', speedBps: 0 })) this.interrupt(jobId, 'paused')
   }
 
   resume(jobId: string): void {
-    this.update(jobId, ['paused'], { state: 'queued' })
+    this.patch(jobId, ['paused'], { state: 'queued' })
   }
 
   cancel(jobId: string): void {
-    this.update(jobId, VISIBLE_STATES, { state: 'cancelled', speedBps: 0 })
+    const job = this.repo.jobs.get(jobId)
+    if (!this.patch(jobId, VISIBLE_STATES, { state: 'cancelled', speedBps: 0, reason: undefined })) return
+    this.interrupt(jobId, 'cancelled')
+    void clearStaging(this.stagingDir(job!.gameId))
   }
 
   retry(jobId: string): void {
     const job = this.repo.jobs.get(jobId)
     if (!job || !['failed', 'stalled', 'cancelled'].includes(job.state)) return
-    const restart = job.state === 'failed'
-    this.put({
-      ...job,
-      state: 'queued',
-      reason: undefined,
-      attempts: job.attempts + 1,
-      bytesDone: restart ? 0 : job.bytesDone,
-      progress: restart ? 0 : job.progress
-    })
+    this.repo.jobs.put({ ...job, state: 'queued', reason: undefined, speedBps: 0, attempts: job.attempts + 1 })
     this.publish()
   }
 
@@ -96,105 +119,135 @@ export class JobRunner {
   }
 
   removeForGame(gameId: string): void {
-    this.repo.jobs.all().filter((job) => job.gameId === gameId).forEach((job) => this.repo.jobs.delete(job.id))
+    for (const job of this.repo.jobs.all().filter((row) => row.gameId === gameId)) {
+      this.interrupt(job.id, 'removed')
+      this.repo.jobs.delete(job.id)
+    }
+    void clearStaging(this.stagingDir(gameId))
     this.publish()
   }
 
-  private update(jobId: string, from: readonly JobState[], patch: Partial<SeededJob>): void {
+  /** Applies a patch when the job is in one of `from`. Returns whether it applied. */
+  private patch(jobId: string, from: readonly JobState[], patch: Partial<DownloadJob>): boolean {
     const job = this.repo.jobs.get(jobId)
-    if (!job || !from.includes(job.state)) return
-    this.put({ ...job, ...patch })
+    if (!job || !from.includes(job.state)) return false
+    this.repo.jobs.put({ ...job, ...patch })
     this.publish()
+    return true
   }
 
-  private put(job: SeededJob): void {
-    const previous = this.repo.jobs.get(job.id)
-    if (previous?.state !== job.state) this.phaseStartedAt.set(job.id, Date.now())
-    this.repo.jobs.put(job)
+  private interrupt(jobId: string, why: string): void {
+    const live = this.live.get(jobId)
+    if (!live) return
+    live.controller.abort(new Interrupted(why))
+    live.transfer?.abort(new Interrupted(why))
+  }
+
+  /** Pipeline-side state change; ignored once the job was paused or cancelled. */
+  private set(jobId: string, patch: Partial<DownloadJob>): void {
+    if (this.live.get(jobId)?.controller.signal.aborted) return
+    const job = this.repo.jobs.get(jobId)
+    if (!job) return
+    this.repo.jobs.put({ ...job, ...patch })
+    this.publish()
   }
 
   private publish(): void {
     this.onJobsChanged(this.jobs())
   }
 
-  private elapsed(job: SeededJob, now: number): number {
-    return now - (this.phaseStartedAt.get(job.id) ?? now)
-  }
-
   private tick(): void {
+    const queued = this.repo.jobs
+      .all()
+      .filter((job) => job.state === 'queued')
+      .sort((a, b) => a.createdAt - b.createdAt)
+    for (const job of queued) {
+      if (this.live.size >= this.repo.settings.concurrentDownloads) break
+      void this.run(job)
+    }
+
     const now = Date.now()
-    const dt = (now - this.lastTick) / 1000
-    this.lastTick = now
-    const jobs = this.repo.jobs.all().sort((a, b) => a.createdAt - b.createdAt)
     let changed = false
-    let libraryChanged = false
-
-    let running = jobs.filter((job) => RUNNING_STATES.includes(job.state)).length
-    for (const job of jobs) {
-      if (job.state === 'queued' && running < this.repo.settings.concurrentDownloads) {
-        job.state = 'resolving'
-        this.put(job)
-        running++
-        changed = true
-      }
-    }
-
-    for (const job of jobs) {
-      const next = this.advance(job, now, dt)
+    for (const [jobId, live] of this.live) {
+      const job = this.repo.jobs.get(jobId)
+      if (!job) continue
+      const next = this.advance(job, live, now)
       if (!next) continue
-      this.put(next)
+      this.repo.jobs.put(next)
       changed = true
-      if (next.state === 'ready') {
-        this.markInstalled(next.gameId)
-        libraryChanged = true
-      }
     }
-
     if (changed) this.publish()
-    if (libraryChanged) this.onLibraryChanged()
   }
 
-  /** Returns the job's next value, or undefined when nothing changed this tick. */
-  private advance(job: SeededJob, now: number, dt: number): SeededJob | undefined {
-    const elapsed = this.elapsed(job, now)
-    switch (job.state) {
-      case 'resolving':
-        return elapsed >= PHASE_MS.resolving! ? { ...job, state: 'downloading' } : undefined
-      case 'downloading': {
-        const baseSpeed = job.bytesTotal / DOWNLOAD_SECONDS
-        const speedBps = Math.round(baseSpeed * (0.8 + Math.random() * 0.4))
-        const bytesDone = Math.min(job.bytesTotal, job.bytesDone + speedBps * dt)
-        const progress = bytesDone / job.bytesTotal
-        if (job.fault === 'stall' && job.attempts === 0 && progress >= STALL_AT_PROGRESS) {
-          return { ...job, state: 'stalled', speedBps: 0, reason: 'No data received from source for 30s' }
-        }
-        if (bytesDone >= job.bytesTotal) return { ...job, state: 'verifying', bytesDone, progress: 1, speedBps: 0 }
-        return { ...job, bytesDone, progress, speedBps }
-      }
-      case 'verifying':
-        if (elapsed < PHASE_MS.verifying!) return undefined
-        if (job.fault === 'hash' && job.attempts === 0) {
-          return { ...job, state: 'failed', reason: 'Hash mismatch on part 2 of 3 (expected 3f9a…c21e, got 9b07…44d1)' }
-        }
-        return { ...job, state: 'extracting' }
-      case 'extracting':
-        return elapsed >= PHASE_MS.extracting! ? { ...job, state: 'ready', speedBps: 0 } : undefined
-      case 'stalled':
-        // Simulated reconnect: the second attempt goes through.
-        return elapsed >= STALL_RECOVER_MS ? { ...job, state: 'queued', reason: undefined, attempts: job.attempts + 1 } : undefined
-      default:
-        return undefined
+  /** Real bytes → progress; bytes over time → smoothed speed. */
+  private advance(job: DownloadJob, live: LiveJob, now: number): DownloadJob | undefined {
+    if (job.state !== 'downloading' && job.state !== 'stalled' && job.state !== 'verifying') return undefined
+    const dt = (now - live.sampledAt) / 1000
+    const sample = dt > 0 ? Math.max(0, live.bytesDone - live.sampledBytes) / dt : 0
+    live.sampledBytes = live.bytesDone
+    live.sampledAt = now
+    const speedBps = job.state === 'downloading' ? Math.round(job.speedBps + SPEED_SMOOTHING * (sample - job.speedBps)) : 0
+    const progress = job.bytesTotal > 0 ? live.bytesDone / job.bytesTotal : 0
+    if (job.bytesDone === live.bytesDone && job.speedBps === speedBps) return undefined
+    return { ...job, bytesDone: live.bytesDone, progress, speedBps }
+  }
+
+  private async run(job: DownloadJob): Promise<void> {
+    const live: LiveJob = { controller: new AbortController(), bytesDone: job.bytesDone, sampledBytes: job.bytesDone, sampledAt: Date.now() }
+    this.live.set(job.id, live)
+    const signal = live.controller.signal
+    this.set(job.id, { state: 'resolving', reason: undefined, speedBps: 0 })
+    try {
+      const game = this.repo.games.get(job.gameId)!
+      const manifest = await this.manifestFor(game, signal)
+      const stagingDir = this.stagingDir(game.id)
+      const transfer = new Transfer(stagingDir, manifest.parts, {
+        onBytes: (bytes) => (live.bytesDone = bytes),
+        onPhase: (phase, detail) => this.set(job.id, { state: PHASE_STATE[phase], reason: phase === 'stalled' ? detail : undefined })
+      })
+      live.transfer = transfer
+      this.set(job.id, { bytesTotal: transfer.bytesTotal })
+      signal.throwIfAborted()
+      await transfer.run()
+
+      this.set(job.id, { state: 'extracting', bytesDone: transfer.bytesTotal, progress: 1, speedBps: 0, reason: undefined })
+      const installed = await this.install(this.repo.games.get(game.id)!, stagingDir, signal)
+      signal.throwIfAborted()
+      this.markInstalled(game.id, installed)
+      this.set(job.id, { state: 'ready' })
+    } catch (error) {
+      if (signal.aborted || error instanceof Interrupted) return
+      this.set(job.id, { state: 'failed', speedBps: 0, reason: (error as Error).message })
+    } finally {
+      this.live.delete(job.id)
     }
   }
 
-  private markInstalled(gameId: string): void {
+  /** Resolves the game's source into parts with pinned hashes, reusing a still-valid manifest. */
+  private async manifestFor(game: Game, signal: AbortSignal): Promise<Manifest> {
+    if (!game.source || !game.shape) throw new Error('No source set for this game')
+    const parts = await resolverFor(game.shape).resolve({ gameId: game.id, input: game.source, shape: game.shape })
+    const pinned = game.manifest?.parts
+    const unchanged =
+      pinned !== undefined &&
+      game.manifest!.version === game.version &&
+      pinned.length === parts.length &&
+      pinned.every((part, i) => part.path === parts[i].path && part.sizeBytes === parts[i].sizeBytes && part.sha256)
+    if (unchanged) return game.manifest!
+
+    // No sidecar checksum: hash the source once so every staged copy can be checked against it.
+    for (const part of parts) {
+      if (!part.sha256) part.sha256 = await sha256File(part.path!, signal)
+    }
+    const manifest: Manifest = { version: game.version, parts, createdAt: Date.now() }
+    this.repo.games.put({ ...this.repo.games.get(game.id)!, parts, manifest })
+    return manifest
+  }
+
+  private markInstalled(gameId: string, installed: InstallResult): void {
     const entry = this.repo.library.all().find((row) => row.kind === 'game' && row.refId === gameId)
-    if (!entry) return
-    const game = this.repo.games.get(gameId)!
-    this.repo.library.put({
-      ...entry,
-      state: 'ready',
-      path: `${this.repo.settings.libraryPath}\\${game.title.replace(/[^A-Za-z0-9]/g, '')}`
-    })
+    if (entry) this.repo.library.put({ ...entry, state: 'ready', path: installed.path })
+    if (installed.exeHint) this.repo.games.put({ ...this.repo.games.get(gameId)!, exeHint: installed.exeHint })
+    this.onLibraryChanged()
   }
 }

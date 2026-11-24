@@ -79,7 +79,8 @@ export class MistService implements MistCalls {
   }
 
   async setSource(gameId: string, input: string, shape: SourceShape): Promise<ActionResult> {
-    const game = this.repo.games.get(gameId)!
+    // A new source invalidates the pinned manifest; the next install re-resolves and re-hashes.
+    const { manifest: _stale, ...game } = this.repo.games.get(gameId)!
     this.repo.games.put({ ...game, source: input, shape })
     try {
       const parts = await resolverFor(shape).resolve({ gameId, input, shape })

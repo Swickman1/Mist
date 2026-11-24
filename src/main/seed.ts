@@ -1,23 +1,17 @@
 // Fake seed data. Every row is local; art is generated SVG.
 import type { DownloadJob, Episode, Game, LibraryEntry, Settings, Show, SourceShape } from '../shared/types'
+import { join } from 'node:path'
 import { makeArt } from './art'
 
 const GB = 1024 ** 3
 const DAY = 86_400_000
-
-/** Fault injected into a seeded job so the runner exercises failure paths. */
-export type JobFault = 'stall' | 'hash'
-
-export interface SeededJob extends DownloadJob {
-  fault?: JobFault
-}
 
 export interface SeedData {
   games: Game[]
   shows: Show[]
   episodes: Episode[]
   library: LibraryEntry[]
-  jobs: SeededJob[]
+  jobs: DownloadJob[]
 }
 
 interface GameSeed {
@@ -179,7 +173,7 @@ export function buildSeed(now: number): SeedData {
     }))
   ]
 
-  const job = (gameId: string, state: DownloadJob['state'], progress: number, order: number, fault?: JobFault): SeededJob => {
+  const job = (gameId: string, state: DownloadJob['state'], progress: number, order: number): DownloadJob => {
     const bytesTotal = byId(gameId).sizeBytes
     return {
       id: `job-${gameId}`,
@@ -190,26 +184,28 @@ export function buildSeed(now: number): SeedData {
       bytesDone: Math.round(bytesTotal * progress),
       speedBps: 0,
       attempts: 0,
-      createdAt: now - (10 - order) * 60_000,
-      fault
+      createdAt: now - (10 - order) * 60_000
     }
   }
 
-  const jobs: SeededJob[] = [
-    job('g-northbound', 'downloading', 0.22, 0),
-    job('g-glasswing', 'paused', 0.55, 1),
-    job('g-lantern-keep', 'queued', 0, 2, 'stall'),
-    job('g-rust-and-rhyme', 'queued', 0, 3, 'hash')
-  ]
+  // Real transfers only: one paused job. Resuming it copies from its source path.
+  const jobs: DownloadJob[] = [job('g-glasswing', 'paused', 0.55, 1)]
 
   return { games, shows, episodes, library, jobs }
 }
 
-export function defaultSettings(): Settings {
+/** Default folders live under the user's home so they exist on any machine. */
+export function defaultPaths(home: string): Pick<Settings, 'libraryPath' | 'stagingPath' | 'saveBackupPath'> {
   return {
-    libraryPath: 'D:\\Mist\\Library',
-    stagingPath: 'D:\\Mist\\Staging',
-    saveBackupPath: 'D:\\Mist\\SaveBackups',
+    libraryPath: join(home, 'Mist', 'Library'),
+    stagingPath: join(home, 'Mist', 'Staging'),
+    saveBackupPath: join(home, 'Mist', 'SaveBackups')
+  }
+}
+
+export function defaultSettings(home: string): Settings {
+  return {
+    ...defaultPaths(home),
     concurrentDownloads: 1,
     sources: [
       { id: 'local', name: 'Local folders', enabled: true },

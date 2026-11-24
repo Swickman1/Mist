@@ -71,10 +71,12 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   blockNetwork()
 
-  const repo = new Repository(join(app.getPath('userData'), 'mist.db'))
+  const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
+  // Until extraction lands (task 6) a finished job points the library entry at its staging folder.
   const runner = new JobRunner(
     repo,
+    async (_game, stagingDir) => ({ path: stagingDir }),
     (jobs) => broadcast(IPC.jobs, jobs),
     () => broadcast(IPC.snapshot, service.snapshot())
   )
