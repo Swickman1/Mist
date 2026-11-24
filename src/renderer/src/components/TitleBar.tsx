@@ -1,13 +1,17 @@
+// Custom title bar. Windows draws the native minimize / maximize / close
+// buttons on the right (titleBarOverlay); this bar reserves their space.
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ui } from '../config'
-import { api, useMist } from '../store'
+import { useMist } from '../store'
 import { Icon } from './Icon'
+import { Logo } from './Logo'
 
 interface Result {
   id: string
   title: string
   kind: 'Game' | 'Show'
+  art: string
   to: string
 }
 
@@ -21,8 +25,8 @@ export function TitleBar() {
     const q = query.trim().toLowerCase()
     if (!q) return []
     return [
-      ...snapshot.games.map((g): Result => ({ id: g.id, title: g.title, kind: 'Game', to: `/games/${g.id}` })),
-      ...snapshot.shows.map((s): Result => ({ id: s.id, title: s.title, kind: 'Show', to: `/shows/${s.id}` }))
+      ...snapshot.games.map((g): Result => ({ id: g.id, title: g.title, kind: 'Game', art: g.art, to: `/games/${g.id}` })),
+      ...snapshot.shows.map((s): Result => ({ id: s.id, title: s.title, kind: 'Show', art: s.poster, to: `/shows/${s.id}` }))
     ]
       .filter((r) => r.title.toLowerCase().includes(q))
       .slice(0, ui.searchResultLimit)
@@ -36,17 +40,13 @@ export function TitleBar() {
 
   return (
     <header className="titlebar">
-      <div className="traffic no-drag">
-        <button className="traffic__btn traffic__btn--close" aria-label="Close" onClick={() => api.windowControl('close')} />
-        <button className="traffic__btn" aria-label="Minimize" onClick={() => api.windowControl('minimize')} />
-        <button className="traffic__btn" aria-label="Maximize" onClick={() => api.windowControl('maximize')} />
-      </div>
+      <Logo />
 
       <div className="search no-drag">
         <Icon name="search" size={16} />
         <input
           value={query}
-          placeholder="Search library"
+          placeholder="Search games, shows and movies"
           aria-label="Search library"
           onChange={(e) => {
             setQuery(e.target.value)
@@ -65,6 +65,7 @@ export function TitleBar() {
             {results.map((r) => (
               <li key={r.id}>
                 <button onMouseDown={() => go(r)}>
+                  <img src={r.art} alt="" />
                   <span>{r.title}</span>
                   <span className="muted">{r.kind}</span>
                 </button>
@@ -74,8 +75,10 @@ export function TitleBar() {
         )}
       </div>
 
-      <div className="avatar no-drag" aria-label="Local profile" title="Local profile">
-        M
+      <div className="titlebar__end">
+        <div className="avatar no-drag" aria-label="Local profile" title="Local profile">
+          M
+        </div>
       </div>
     </header>
   )

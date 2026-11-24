@@ -25,7 +25,7 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 | `src/main/seed.ts`, `art.ts` | Fake rows + deterministic SVG gradient art (no picsum, nothing remote) |
 | `src/main/jobRunner.ts` | Fake download runner: queued → resolving → downloading → verifying → extracting → ready. Lantern Keep stalls at 40% then recovers on attempt 2; Rust & Rhyme fails on hash mismatch until Retry |
 | `src/main/service.ts` | `MistService implements MistCalls` — the only thing the renderer talks to |
-| `src/main/index.ts` | Frameless window, IPC dispatch, network guard |
+| `src/main/index.ts`, `chrome.ts` | Window with native Windows caption buttons (`titleBarOverlay`, themed), IPC dispatch, network guard |
 | `src/preload/index.ts` | `window.mist` bridge built from `MIST_METHODS` |
 | `src/renderer/src` | React UI: `store.tsx` (snapshot + UI state), `selectors.ts` (derived rules), `config.ts` (tuning knobs), `components/`, `pages/` |
 

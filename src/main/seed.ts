@@ -214,6 +214,6 @@ export function defaultSettings(): Settings {
       { id: 'magnet', name: 'Magnet links', enabled: false }
     ],
     cacheBytes: Math.round(1.7 * GB),
-    theme: 'dark'
+    theme: 'mist'
   }
 }

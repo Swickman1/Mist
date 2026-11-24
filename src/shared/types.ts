@@ -94,7 +94,8 @@ export interface SourceToggle {
   enabled: boolean
 }
 
-export type Theme = 'dark' | 'near-black'
+export const THEMES = ['mist', 'midnight'] as const
+export type Theme = (typeof THEMES)[number]
 
 export interface Settings {
   libraryPath: string
@@ -122,8 +123,6 @@ export interface ActionResult {
   message: string
 }
 
-export type WindowAction = 'minimize' | 'maximize' | 'close'
-
 /** Every call the renderer can make into the main process. */
 export interface MistCalls {
   snapshot(): Snapshot
@@ -148,7 +147,6 @@ export interface MistCalls {
   updateSettings(patch: Partial<Settings>): void
   clearCache(): void
   pickFolder(): Promise<string | null>
-  windowControl(action: WindowAction): void
 }
 
 export type MistMethod = keyof MistCalls
@@ -175,8 +173,7 @@ export const MIST_METHODS = [
   'toggleWatchlist',
   'updateSettings',
   'clearCache',
-  'pickFolder',
-  'windowControl'
+  'pickFolder'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
@@ -184,7 +181,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'windowControl']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder']
 
 export const IPC = {
   call: 'mist:call',

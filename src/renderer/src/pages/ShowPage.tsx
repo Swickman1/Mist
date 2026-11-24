@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { Stat } from '../components/Stat'
 import { entryFor, episodeLabel, isInProgress, isWatched, nextEpisode } from '../selectors'
 import { api, useMist } from '../store'
 
@@ -14,6 +15,8 @@ export function ShowPage() {
   const resuming = next !== undefined && isInProgress(next)
   const onWatchlist = snapshot.watchlist.includes(show.id)
   const entry = entryFor(snapshot, 'show', show.id)
+  const isMovie = episodes.length === 1
+  const watchedCount = episodes.filter(isWatched).length
 
   return (
     <div className="page page--hero">
@@ -22,27 +25,30 @@ export function ShowPage() {
         <div className="hero__fade" />
         <div className="hero__content">
           <h1 className="hero__title">{show.title}</h1>
-          <div className="chips">
-            <span className="chip">{show.year}</span>
-            <span className="chip">★ {show.rating.toFixed(1)}</span>
-            <span className="chip">{show.seasons.length === 1 && episodes.length === 1 ? 'Movie' : `${show.seasons.length} season${show.seasons.length > 1 ? 's' : ''}`}</span>
-            {!entry && <span className="chip">Not in library</span>}
-          </div>
-          <div className="actions">
-            <button className="btn btn--primary btn--lg" disabled={!next} onClick={() => next && openPlayer(next.id)}>
-              <Icon name="play" />
-              {resuming ? `RESUME ${episodeLabel(next!)}` : 'PLAY'}
+        </div>
+      </div>
+
+      <div className="playbar">
+        <button className="btn btn--play btn--xl" disabled={!next} onClick={() => next && openPlayer(next.id)}>
+          <Icon name="play" size={20} />
+          {resuming ? `RESUME ${episodeLabel(next!)}` : 'PLAY'}
+        </button>
+        <div className="playbar__stats">
+          <Stat label="Year" value={String(show.year)} />
+          <Stat label="Rating" value={`★ ${show.rating.toFixed(1)}`} />
+          <Stat label={isMovie ? 'Runtime' : 'Seasons'} value={isMovie ? `${Math.round(episodes[0].durationSec / 60)} min` : String(show.seasons.length)} />
+          {!isMovie && <Stat label="Watched" value={`${watchedCount} of ${episodes.length}`} />}
+        </div>
+        <div className="playbar__tools">
+          <button className="btn btn--ghost" onClick={() => api.toggleWatchlist(show.id)} aria-pressed={onWatchlist}>
+            <Icon name={onWatchlist ? 'check' : 'plus'} />
+            {onWatchlist ? 'On watchlist' : 'Add to watchlist'}
+          </button>
+          {!entry && (
+            <button className="btn btn--ghost" onClick={async () => notify(await api.addShow(show.id))}>
+              Add to library
             </button>
-            <button className="btn btn--ghost btn--lg" onClick={() => api.toggleWatchlist(show.id)} aria-pressed={onWatchlist}>
-              <Icon name={onWatchlist ? 'check' : 'plus'} />
-              {onWatchlist ? 'On watchlist' : 'Add to watchlist'}
-            </button>
-            {!entry && (
-              <button className="btn btn--ghost btn--lg" onClick={async () => notify(await api.addShow(show.id))}>
-                Add to library
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
 

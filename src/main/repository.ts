@@ -1,6 +1,6 @@
 // Local SQLite persistence. Each entity lives in its own document table.
 import Database from 'better-sqlite3'
-import type { Episode, Game, LibraryEntry, Settings, Show } from '../shared/types'
+import { THEMES, type Episode, type Game, type LibraryEntry, type Settings, type Show } from '../shared/types'
 import { buildSeed, defaultSettings, type SeededJob } from './seed'
 
 class DocTable<T extends { id: string }> {
@@ -68,6 +68,14 @@ export class Repository {
     this.watchlist = new DocTable(this.db, 'watchlist')
     this.settingsTable = new DocTable(this.db, 'settings')
     if (this.games.all().length === 0) this.seed()
+    this.migrateTheme()
+  }
+
+  /** Databases from before the mist theme stored 'dark' / 'near-black'. */
+  private migrateTheme(): void {
+    const settings = this.settings
+    if (THEMES.includes(settings.theme)) return
+    this.settings = { ...settings, theme: (settings.theme as string) === 'near-black' ? 'midnight' : 'mist' }
   }
 
   get settings(): Settings {

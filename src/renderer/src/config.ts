@@ -8,6 +8,8 @@ export const ui = {
   searchResultLimit: 8,
   /** Home "Continue Watching" is a single 4-across row. */
   continueWatchingCount: 4,
+  /** Library home "Recent games" shelf length. */
+  recentShelfCount: 5,
   /** Episodes past this fraction count as watched. */
   watchedFraction: 0.95
 } as const

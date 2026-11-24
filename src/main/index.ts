@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'node:path'
-import { IPC, MIST_METHODS, READ_ONLY_METHODS, type MistMethod } from '../shared/types'
+import { IPC, MIST_METHODS, READ_ONLY_METHODS, type MistMethod, type Theme } from '../shared/types'
+import { titleBarOverlay, windowBackground } from './chrome'
 import { JobRunner } from './jobRunner'
 import { Repository } from './repository'
 import { MistService } from './service'
@@ -21,14 +22,15 @@ function blockNetwork(): void {
   })
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(theme: Theme): BrowserWindow {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 640,
-    frame: false,
-    backgroundColor: '#0E0F11',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: titleBarOverlay(theme),
+    backgroundColor: windowBackground(theme),
     show: false,
     title: 'Mist',
     webPreferences: {
@@ -66,11 +68,11 @@ app.whenReady().then(() => {
   })
 
   runner.start()
-  mainWindow = createWindow()
+  mainWindow = createWindow(repo.settings.theme)
   mainWindow.on('closed', () => (mainWindow = undefined))
 
   app.on('activate', () => {
-    if (!mainWindow) mainWindow = createWindow()
+    if (!mainWindow) mainWindow = createWindow(repo.settings.theme)
   })
   app.on('before-quit', () => runner.stop())
 })

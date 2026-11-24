@@ -1,8 +1,9 @@
 // MistService: every renderer call lands here. Owns the repository and job runner.
 import { BrowserWindow, dialog } from 'electron'
-import type { ActionResult, LibraryEntry, MistCalls, Settings, Snapshot, SourceShape, WindowAction } from '../shared/types'
+import type { ActionResult, LibraryEntry, MistCalls, Settings, Snapshot, SourceShape } from '../shared/types'
 import { resolverFor } from '../sources'
 import { sha256File } from '../verify'
+import { applyChrome } from './chrome'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
 
@@ -140,6 +141,8 @@ export class MistService implements MistCalls {
 
   updateSettings(patch: Partial<Settings>): void {
     this.repo.settings = { ...this.repo.settings, ...patch }
+    const win = this.window()
+    if (patch.theme && win) applyChrome(win, patch.theme)
   }
 
   clearCache(): void {
@@ -151,15 +154,6 @@ export class MistService implements MistCalls {
     const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'] }
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     return result.canceled ? null : result.filePaths[0]
-  }
-
-  windowControl(action: WindowAction): void {
-    const win = this.window()
-    if (!win) return
-    if (action === 'minimize') win.minimize()
-    else if (action === 'close') win.close()
-    else if (win.isMaximized()) win.unmaximize()
-    else win.maximize()
   }
 
   private entryFor(kind: LibraryEntry['kind'], refId: string): LibraryEntry | undefined {

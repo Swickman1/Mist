@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
-import type { Settings as SettingsShape, Theme } from '../../../shared/types'
+import { THEMES, type Settings as SettingsShape, type Theme } from '../../../shared/types'
 import { formatBytes } from '../selectors'
 import { api, useMist } from '../store'
 
-type PathKey = 'libraryPath' | 'stagingPath' | 'saveBackupPath'
+const THEME_LABEL: Record<Theme, string> = { mist: 'Mist', midnight: 'Midnight' }
+
+type PathKey ='libraryPath' | 'stagingPath' | 'saveBackupPath'
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -118,11 +120,11 @@ export function Settings() {
 
       <section className="settings-group">
         <h2 className="section__title">Appearance</h2>
-        <Row label="Theme">
+        <Row label="Theme" hint="Mist has drifting fog; Midnight is darker and still">
           <div className="segmented" role="radiogroup" aria-label="Theme">
-            {(['dark', 'near-black'] as Theme[]).map((theme) => (
+            {THEMES.map((theme) => (
               <button key={theme} role="radio" aria-checked={settings.theme === theme} className={settings.theme === theme ? 'is-selected' : ''} onClick={() => api.updateSettings({ theme })}>
-                {theme === 'dark' ? 'Dark' : 'Near-black'}
+                {THEME_LABEL[theme]}
               </button>
             ))}
           </div>

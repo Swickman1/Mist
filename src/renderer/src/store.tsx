@@ -46,7 +46,7 @@ export function MistProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = snapshot?.settings.theme ?? 'dark'
+    document.documentElement.dataset.theme = snapshot?.settings.theme ?? 'mist'
   }, [snapshot?.settings.theme])
 
   const notify = useCallback((result: ActionResult | string) => {
