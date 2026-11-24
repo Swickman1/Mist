@@ -64,6 +64,8 @@ export interface Episode {
   still: string
   durationSec: number
   positionSec: number
+  /** The episode's video file inside its show folder, when found on disk. */
+  filePath?: string
 }
 
 export type LibraryState = 'ready' | 'missing' | 'update'
@@ -155,7 +157,7 @@ export interface ActionResult {
 export interface MistCalls {
   snapshot(): Snapshot
   addGame(gameId: string, source?: { input: string; shape: SourceShape }): Promise<ActionResult>
-  addShow(showId: string, path?: string): ActionResult
+  addShow(showId: string, path?: string): Promise<ActionResult>
   removeEntry(entryId: string): void
   clearLibrary(): void
   restoreSeed(): void

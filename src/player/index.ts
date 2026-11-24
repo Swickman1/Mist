@@ -1,3 +1,3 @@
-// Seam: video playback. Player renders a black 16:9 box in a loading state.
+// Local video player (native <video> over mist-media://). Props stay stable for a future libmpv backend.
 export { Player } from './Player'
 export type { PlayerProps } from './Player'

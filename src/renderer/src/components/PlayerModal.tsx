@@ -19,7 +19,15 @@ export function PlayerModal() {
 
   return (
     <Modal title={show.title} onClose={() => openPlayer(null)} wide>
-      <Player title={`${show.title} · ${episodeLabel(episode)}`} subtitle={episode.title} startAtSec={episode.positionSec} />
+      <Player
+        key={episode.id}
+        title={`${show.title} · ${episodeLabel(episode)}`}
+        subtitle={episode.title}
+        filePath={episode.filePath}
+        poster={episode.still}
+        startAtSec={episode.positionSec}
+        onPosition={(positionSec) => void api.setEpisodePosition(episode.id, positionSec)}
+      />
     </Modal>
   )
 }

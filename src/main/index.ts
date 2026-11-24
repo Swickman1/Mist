@@ -1,9 +1,11 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { IPC, MIST_METHODS, READ_ONLY_METHODS, type MistMethod, type Theme } from '../shared/types'
+import { MEDIA_SCHEME } from '../shared/media'
 import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome'
 import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
+import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media'
 import { Repository } from './repository'
 import { MistService } from './service'
 
@@ -11,7 +13,7 @@ const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 let mainWindow: BrowserWindow | undefined
 
 /** Local protocols Mist always serves from disk or memory. */
-const LOCAL_PROTOCOLS = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:']
+const LOCAL_PROTOCOLS = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:', `${MEDIA_SCHEME}:`]
 
 /** The only remote hosts Mist may reach, over https, for title metadata and artwork. */
 export const ALLOWED_HTTPS_HOSTS = ['image.tmdb.org', 'api.themoviedb.org']
@@ -61,6 +63,7 @@ function createWindow(theme: Theme): BrowserWindow {
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
 app.setAppUserModelId(APP_ID)
+registerMediaScheme()
 
 app.on('second-instance', () => {
   if (!mainWindow) return
@@ -90,6 +93,8 @@ app.whenReady().then(() => {
   })
 
   reconcileInstalled(repo)
+  handleMediaRequests(repo)
+  void indexAllShows(repo).then((changed) => changed && broadcast(IPC.snapshot, service.snapshot()))
   runner.start()
   mainWindow = createWindow(repo.settings.theme)
   // Folders deleted while Mist was in the background show as MISSING when it is focused again.

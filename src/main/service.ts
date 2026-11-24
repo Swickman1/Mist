@@ -6,6 +6,7 @@ import { sha256Parts } from '../verify'
 import { existsSync } from 'node:fs'
 import { applyChrome } from './chrome'
 import { launchGame } from './install'
+import { indexShow } from './media'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
 
@@ -42,11 +43,14 @@ export class MistService implements MistCalls {
     return { ok: true, message: `${game.title} added to your library` }
   }
 
-  addShow(showId: string, path?: string): ActionResult {
+  async addShow(showId: string, path?: string): Promise<ActionResult> {
     const show = this.repo.shows.get(showId)!
-    this.entryFor('show', showId) ??
+    const entry =
+      this.entryFor('show', showId) ??
       this.repo.library.put({ id: `lib-${showId}`, kind: 'show', refId: showId, path, addedAt: Date.now(), playtimeSec: 0, state: path ? 'ready' : 'missing' })
-    return { ok: true, message: `${show.title} added to your library` }
+    await indexShow(this.repo, entry)
+    const found = this.repo.episodes.all().filter((episode) => episode.showId === showId && episode.filePath).length
+    return { ok: true, message: `${show.title} added to your library · ${found} video file(s) found` }
   }
 
   removeEntry(entryId: string): void {
