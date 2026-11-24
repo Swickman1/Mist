@@ -70,6 +70,7 @@ export class JobRunner {
     const existing = this.repo.jobs.all().find((job) => job.gameId === gameId && VISIBLE_STATES.includes(job.state))
     if (existing) {
       if (existing.state === 'paused') this.resume(existing.id)
+      if (existing.state === 'failed') this.retry(existing.id)
       return
     }
     const game = this.repo.games.get(gameId)!

@@ -197,9 +197,9 @@ export function buildSeed(now: number): SeedData {
 /** Default folders live under the user's home so they exist on any machine. */
 export function defaultPaths(home: string): Pick<Settings, 'libraryPath' | 'stagingPath' | 'saveBackupPath'> {
   return {
-    libraryPath: join(home, 'Mist', 'Library'),
-    stagingPath: join(home, 'Mist', 'Staging'),
-    saveBackupPath: join(home, 'Mist', 'SaveBackups')
+    libraryPath: join(home, 'Mist Data', 'Library'),
+    stagingPath: join(home, 'Mist Data', 'Staging'),
+    saveBackupPath: join(home, 'Mist Data', 'SaveBackups')
   }
 }
 

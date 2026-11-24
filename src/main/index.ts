@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { IPC, MIST_METHODS, READ_ONLY_METHODS, type MistMethod, type Theme } from '../shared/types'
 import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome'
+import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
 import { Repository } from './repository'
 import { MistService } from './service'
@@ -73,10 +74,9 @@ app.whenReady().then(() => {
 
   const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
-  // Until extraction lands (task 6) a finished job points the library entry at its staging folder.
   const runner = new JobRunner(
     repo,
-    async (_game, stagingDir) => ({ path: stagingDir }),
+    (game, stagingDir, signal) => installGame(game, stagingDir, repo.settings.libraryPath, signal),
     (jobs) => broadcast(IPC.jobs, jobs),
     () => broadcast(IPC.snapshot, service.snapshot())
   )
@@ -89,8 +89,11 @@ app.whenReady().then(() => {
     return result
   })
 
+  reconcileInstalled(repo)
   runner.start()
   mainWindow = createWindow(repo.settings.theme)
+  // Folders deleted while Mist was in the background show as MISSING when it is focused again.
+  mainWindow.on('focus', () => reconcileInstalled(repo) && broadcast(IPC.snapshot, service.snapshot()))
   mainWindow.on('closed', () => (mainWindow = undefined))
 
   app.on('activate', () => {

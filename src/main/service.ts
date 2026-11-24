@@ -3,7 +3,9 @@ import { app, BrowserWindow, dialog } from 'electron'
 import type { ActionResult, LibraryEntry, MistCalls, Settings, Snapshot, SourceShape } from '../shared/types'
 import { resolverFor } from '../sources'
 import { sha256Parts } from '../verify'
+import { existsSync } from 'node:fs'
 import { applyChrome } from './chrome'
+import { launchGame } from './install'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
 
@@ -67,9 +69,19 @@ export class MistService implements MistCalls {
 
   play(entryId: string): ActionResult {
     const entry = this.repo.library.get(entryId)!
+    if (entry.kind === 'show') {
+      this.repo.library.put({ ...entry, lastPlayedAt: Date.now() })
+      return { ok: true, message: `Playing ${this.repo.shows.get(entry.refId)!.title}` }
+    }
+    const game = this.repo.games.get(entry.refId)!
+    try {
+      launchGame(entry, game)
+    } catch (error) {
+      if (entry.path && !existsSync(entry.path)) this.repo.library.put({ ...entry, state: 'missing' })
+      return { ok: false, message: (error as Error).message }
+    }
     this.repo.library.put({ ...entry, lastPlayedAt: Date.now() })
-    const title = entry.kind === 'game' ? this.repo.games.get(entry.refId)!.title : this.repo.shows.get(entry.refId)!.title
-    return { ok: false, message: `Launching ${title} is not implemented yet` }
+    return { ok: true, message: `Launched ${game.title}` }
   }
 
   install(gameId: string): void {
