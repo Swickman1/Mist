@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import type { ActionResult, LibraryEntry, MistCalls, Settings, Snapshot, SourceShape } from '../shared/types'
 import { resolverFor } from '../sources'
-import { sha256File } from '../verify'
+import { sha256Parts } from '../verify'
 import { applyChrome } from './chrome'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
@@ -91,11 +91,13 @@ export class MistService implements MistCalls {
   }
 
   async verifyGame(gameId: string): Promise<ActionResult> {
-    const entry = this.entryFor('game', gameId)
-    if (!entry?.path) return { ok: false, message: 'Nothing installed to verify' }
+    const parts = this.repo.games.get(gameId)!.manifest?.parts.filter((part) => part.path && part.sha256)
+    if (!parts?.length) return { ok: false, message: 'No install manifest with hashes to verify against' }
     try {
-      const digest = await sha256File(entry.path)
-      return { ok: true, message: `sha256 ${digest}` }
+      const digests = await sha256Parts(parts.map((part) => part.path!))
+      const bad = parts.filter((part, i) => digests[i] !== part.sha256)
+      if (bad.length) return { ok: false, message: `Hash mismatch: ${bad.map((part) => part.name).join(', ')}` }
+      return { ok: true, message: `${parts.length} part(s) match their sha256` }
     } catch (error) {
       return { ok: false, message: (error as Error).message }
     }
