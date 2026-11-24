@@ -49,3 +49,7 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 - App id `com.mist.launcher` (matches `build.appId`) for taskbar grouping; a single instance only (a second launch focuses the open window).
 - Settings → Startup → **Launch at login** (installed app only).
 - **Build gotcha:** without Windows Developer Mode, electron-builder fails extracting `winCodeSign` (macOS symlinks). Fix: extract the cached `.7z` with `7za x -y` into `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0` and rerun.
+
+## Playback
+
+The player uses **mpv** when it is installed (`winget install shinchiro.mpv`, or put `mpv.exe` in `vendor/mpv/`, or on PATH). mpv renders inside a borderless child window that tracks the player's rectangle and is controlled over its JSON IPC pipe. It plays any codec (HEVC, AV1, AC-3/DTS…) with `hwdec=auto-safe`; when no hardware decoder fits, mpv drops to software. Settings → Playback → **Hardware decoding** turns hardware decoding off. When mpv is missing or cannot open a file, the built-in `<video>` player (H.264/VP9/AV1 + AAC/Opus) is used instead, behind the same `Player` props.

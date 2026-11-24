@@ -138,6 +138,17 @@ export function Settings() {
       </section>
 
       <section className="settings-group">
+        <h2 className="section__title">Playback</h2>
+        <Row label="Hardware decoding" hint="mpv uses the GPU decoder when it can and falls back to software automatically">
+          <label className="toggle">
+            <input type="checkbox" checked={settings.hardwareDecode} onChange={() => api.updateSettings({ hardwareDecode: !settings.hardwareDecode })} />
+            <span className="toggle__box" />
+            {settings.hardwareDecode ? 'On' : 'Off'}
+          </label>
+        </Row>
+      </section>
+
+      <section className="settings-group">
         <h2 className="section__title">Appearance</h2>
         <Row label="Theme" hint="Mist has drifting fog; Midnight is darker and still">
           <div className="segmented" role="radiogroup" aria-label="Theme">

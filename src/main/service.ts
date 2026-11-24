@@ -1,12 +1,13 @@
 // MistService: every renderer call lands here. Owns the repository and job runner.
 import { app, BrowserWindow, dialog } from 'electron'
-import type { ActionResult, LibraryEntry, MistCalls, Settings, Snapshot, SourceShape } from '../shared/types'
+import type { ActionResult, LibraryEntry, MistCalls, PlayerBounds, PlayerOpenRequest, PlayerOpenResult, Settings, Snapshot, SourceShape } from '../shared/types'
 import { resolverFor } from '../sources'
 import { sha256Parts } from '../verify'
 import { existsSync } from 'node:fs'
 import { applyChrome } from './chrome'
 import { launchGame } from './install'
 import { indexShow } from './media'
+import type { MpvHost } from './mpv'
 import { backupSaves } from './saves'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
@@ -16,7 +17,8 @@ export class MistService implements MistCalls {
     private readonly repo: Repository,
     private readonly runner: JobRunner,
     private readonly appVersion: string,
-    private readonly window: () => BrowserWindow | undefined
+    private readonly window: () => BrowserWindow | undefined,
+    private readonly mpv: MpvHost
   ) {}
 
   snapshot(): Snapshot {
@@ -181,6 +183,18 @@ export class MistService implements MistCalls {
   setLaunchAtLogin(enabled: boolean): void {
     if (!app.isPackaged) return
     app.setLoginItemSettings({ openAtLogin: enabled })
+  }
+
+  playerOpen(request: PlayerOpenRequest): Promise<PlayerOpenResult> {
+    return this.mpv.open(request)
+  }
+
+  playerBounds(bounds: PlayerBounds): void {
+    this.mpv.setBounds(bounds)
+  }
+
+  playerClose(): Promise<number | null> {
+    return this.mpv.close()
   }
 
   async pickFolder(): Promise<string | null> {

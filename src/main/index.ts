@@ -5,6 +5,7 @@ import { MEDIA_SCHEME } from '../shared/media'
 import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome'
 import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
+import { MpvHost } from './mpv'
 import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media'
 import { Repository } from './repository'
 import { MistService } from './service'
@@ -83,7 +84,8 @@ app.whenReady().then(() => {
     (jobs) => broadcast(IPC.jobs, jobs),
     () => broadcast(IPC.snapshot, service.snapshot())
   )
-  const service = new MistService(repo, runner, app.getVersion(), () => mainWindow)
+  const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event))
+  const service = new MistService(repo, runner, app.getVersion(), () => mainWindow, mpv)
 
   ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {
     if (!MIST_METHODS.includes(method)) throw new Error(`Unknown method ${method}`)
@@ -99,12 +101,16 @@ app.whenReady().then(() => {
   mainWindow = createWindow(repo.settings.theme)
   // Folders deleted while Mist was in the background show as MISSING when it is focused again.
   mainWindow.on('focus', () => reconcileInstalled(repo) && broadcast(IPC.snapshot, service.snapshot()))
+  mainWindow.on('close', () => void mpv.close())
   mainWindow.on('closed', () => (mainWindow = undefined))
 
   app.on('activate', () => {
     if (!mainWindow) mainWindow = createWindow(repo.settings.theme)
   })
-  app.on('before-quit', () => runner.stop())
+  app.on('before-quit', () => {
+    runner.stop()
+    void mpv.close()
+  })
 })
 
 app.on('window-all-closed', () => {

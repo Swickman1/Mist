@@ -213,6 +213,7 @@ export function defaultSettings(home: string): Settings {
       { id: 'removable', name: 'Removable drives', enabled: true }
     ],
     cacheBytes: Math.round(1.7 * GB),
-    theme: 'mist'
+    theme: 'mist',
+    hardwareDecode: true
   }
 }

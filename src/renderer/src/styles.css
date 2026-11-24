@@ -184,7 +184,10 @@ img {
   height: 100%;
 }
 
-.app > :not(.fog) {
+/* Lift the in-flow layout above the fog. Fixed overlays (download bar, modal,
+   toasts) keep their own position and z-index. */
+.titlebar,
+.shell {
   position: relative;
   z-index: 1;
 }

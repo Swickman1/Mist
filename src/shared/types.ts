@@ -128,6 +128,8 @@ export interface Settings {
   sources: SourceToggle[]
   cacheBytes: number
   theme: Theme
+  /** mpv hardware decoding (auto-safe); software is used when it is off or fails. */
+  hardwareDecode: boolean
 }
 
 /** Launch-at-login is OS state; only a packaged install can register itself. */
@@ -147,6 +149,31 @@ export interface Snapshot {
   appVersion: string
   startup: StartupState
 }
+
+/** Player rectangle in CSS pixels, relative to the window's content area. */
+export interface PlayerBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface PlayerOpenRequest {
+  filePath: string
+  title: string
+  startAtSec: number
+  bounds: PlayerBounds
+}
+
+/** mpv when it is available and opened the file; otherwise the renderer falls back to <video>. */
+export type PlayerOpenResult = { backend: 'mpv' } | { backend: 'video'; reason: string }
+
+export type PlayerEvent =
+  | { type: 'time'; position: number; duration: number; paused: boolean }
+  | { type: 'decoder'; hardware: boolean; name: string }
+  | { type: 'ended' }
+  | { type: 'close-request' }
+  | { type: 'error'; message: string }
 
 export interface ActionResult {
   ok: boolean
@@ -177,6 +204,10 @@ export interface MistCalls {
   updateSettings(patch: Partial<Settings>): void
   clearCache(): void
   pickFolder(): Promise<string | null>
+  playerOpen(request: PlayerOpenRequest): Promise<PlayerOpenResult>
+  playerBounds(bounds: PlayerBounds): void
+  /** Stops mpv and returns its last position in seconds (null when nothing was playing). */
+  playerClose(): Promise<number | null>
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -205,7 +236,10 @@ export const MIST_METHODS = [
   'updateSettings',
   'clearCache',
   'pickFolder',
-  'setLaunchAtLogin'
+  'setLaunchAtLogin',
+  'playerOpen',
+  'playerBounds',
+  'playerClose'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
@@ -213,12 +247,13 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose']
 
 export const IPC = {
   call: 'mist:call',
   snapshot: 'mist:snapshot',
-  jobs: 'mist:jobs'
+  jobs: 'mist:jobs',
+  player: 'mist:player'
 } as const
 
 /** Renderer-side view of MistCalls: every call is async over IPC. */
@@ -227,5 +262,6 @@ export type MistApi = {
 } & {
   onSnapshot(listener: (snapshot: Snapshot) => void): () => void
   onJobs(listener: (jobs: DownloadJob[]) => void): () => void
+  onPlayer(listener: (event: PlayerEvent) => void): () => void
   pathForFile(file: File): string
 }

@@ -76,6 +76,15 @@ export class Repository {
     this.migrateTheme()
     this.migrateSourceShapes()
     this.migratePaths()
+    this.migrateSettingsDefaults()
+  }
+
+  /** Settings fields added after a database was created take their defaults. */
+  private migrateSettingsDefaults(): void {
+    const settings = this.settings
+    const defaults = defaultSettings(this.homeDir)
+    const missing = (Object.keys(defaults) as (keyof Settings)[]).filter((key) => settings[key] === undefined)
+    if (missing.length) this.settings = { ...defaults, ...settings }
   }
 
   /** Folder settings on a drive that does not exist (the old D: defaults) move to the home-based defaults. */
