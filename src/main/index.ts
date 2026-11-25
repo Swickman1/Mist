@@ -39,9 +39,10 @@ const EMBED_RESOURCE_TYPES = ['xhr', 'script', 'stylesheet', 'image', 'media', '
 function embedAllowed(details: Electron.OnBeforeRequestListenerDetails, url: URL): boolean {
   if (url.protocol !== 'https:') return false
   const toEmbedHost = hostAllowed(url.hostname, EMBED_HOSTS)
-  if (details.resourceType === 'subFrame') return toEmbedHost
+  const fromEmbedReferrer = details.referrer !== '' && hostAllowed(new URL(details.referrer).hostname, EMBED_HOSTS)
+  if (details.resourceType === 'subFrame') return toEmbedHost || fromEmbedReferrer
   if (!EMBED_RESOURCE_TYPES.includes(details.resourceType)) return false
-  return toEmbedHost || (details.referrer !== '' && hostAllowed(new URL(details.referrer).hostname, EMBED_HOSTS))
+  return toEmbedHost || fromEmbedReferrer
 }
 
 /** Everything outside the local protocols, the dev server and the allowlist is cancelled and logged. */
@@ -65,14 +66,13 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
 }
 
 /**
- * Mist's page is file://, so the embed frame would go out with no Referer and the
- * embedder refuses to play (YouTube: Error 153). Native apps identify themselves
- * by app id instead, as embedders ask apps to.
+ * Mist's page is file://, so embed frames go out with no Referer. BingeAPI's
+ * challenge and player expect a web-origin Referer, so Mist stamps theirs.
  */
 function identifyEmbedFrames(appSession: Electron.Session): void {
   appSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const frame = details.resourceType === 'subFrame' && hostAllowed(new URL(details.url).hostname, EMBED_HOSTS)
-    callback({ requestHeaders: frame ? { ...details.requestHeaders, Referer: `https://${APP_ID}/` } : details.requestHeaders })
+    callback({ requestHeaders: frame ? { ...details.requestHeaders, Referer: 'https://bingeapi.st/' } : details.requestHeaders })
   })
 }
 

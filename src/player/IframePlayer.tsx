@@ -85,7 +85,7 @@ export function IframePlayer({
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, background: '#000' }}
             allow="fullscreen; autoplay; encrypted-media; picture-in-picture"
             referrerPolicy="origin"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
             onLoad={() => setAlive(true)}
           />
         )}

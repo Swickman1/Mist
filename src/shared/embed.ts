@@ -5,7 +5,11 @@
 import type { Episode, Show } from './types'
 
 /** Hosts the iframe player and its page may reach, subdomains included. */
-export const EMBED_HOSTS: readonly string[] = ['bingeapi.st']
+export const EMBED_HOSTS: readonly string[] = [
+  'bingeapi.st',
+  // Cloudflare challenge widget nested inside the embed page.
+  'challenges.cloudflare.com'
+]
 
 /** Embed page URL prefix. Its host must be covered by EMBED_HOSTS. */
 const EMBED_URL = 'https://bingeapi.st/embed/'
