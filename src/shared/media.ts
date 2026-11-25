@@ -1,7 +1,8 @@
 // mist-media:// serves local files to the renderer (file:// is not loadable from
 // the dev server origin):
-//   mist-media://local/<path>                 an indexed episode's video file
-//   mist-media://tmdb/<kind>-<id>/<asset>?src= cached TMDB artwork (fetched once on a miss)
+//   mist-media://local/<path>                    an indexed episode's video file
+//   mist-media://<source>/<key>/<asset>?src=...  cached artwork (fetched once on a miss)
+// where <source> is tmdb (shows/movies) or steam (games).
 
 export const MEDIA_SCHEME = 'mist-media'
 
@@ -13,34 +14,54 @@ export function mediaPath(url: string): string {
   return decodeURIComponent(new URL(url).pathname.replace(/^\//, ''))
 }
 
-/** <kind>-<tmdbId>, the cache folder name for a title. */
-export const TMDB_CACHE_KEY = /^(tv|movie)-\d+$/
-/** poster, hero, or still-s<season>e<episode>. */
-export const TMDB_ASSET = /^(poster|hero|still-s\d+e\d+)$/
-/** <size>/<file> as TMDB serves it, e.g. w500/abc123.jpg. */
-export const TMDB_SRC = /^w\d+\/[A-Za-z0-9_-]+\.(jpg|jpeg|png)$/
+/** Three validation regexes per artwork source: cache key, asset name, remote src path. */
+export const ART_SOURCES = {
+  tmdb: {
+    /** <kind>-<tmdbId> */
+    key: /^(tv|movie)-\d+$/,
+    /** poster, hero, still-s<season>e<episode> */
+    asset: /^(poster|hero|still-s\d+e\d+)$/,
+    /** <size>/<file> under image.tmdb.org/t/p/ */
+    src: /^w\d+\/[A-Za-z0-9_-]+\.(jpg|jpeg|png)$/
+  },
+  steam: {
+    /** <appid> */
+    key: /^\d+$/,
+    asset: /^(capsule|hero|header)$/,
+    /** store_item_assets/steam/apps/<appid>/[<sha1>/]<file> under shared.akamai.steamstatic.com */
+    src: /^store_item_assets\/steam\/apps\/\d+\/([0-9a-f]{40}\/)?[A-Za-z0-9_-]+\.(jpg|jpeg|png)$/
+  }
+} as const
 
-export interface TmdbArtRef {
+export type ArtSource = keyof typeof ART_SOURCES
+
+export interface ArtRef {
+  source: ArtSource
   key: string
   asset: string
-  /** <size>/<file>, without the leading slash. */
+  /** Remote path relative to the source's image base, without a leading slash. */
   src: string
 }
 
-export function tmdbArtUrl(ref: TmdbArtRef): string {
-  return `${MEDIA_SCHEME}://tmdb/${ref.key}/${ref.asset}?src=${encodeURIComponent(ref.src)}`
+export function artUrl(ref: ArtRef): string {
+  return `${MEDIA_SCHEME}://${ref.source}/${ref.key}/${ref.asset}?src=${encodeURIComponent(ref.src)}`
 }
 
-/** Parses and validates a mist-media://tmdb URL; undefined when it is not one. */
-export function parseTmdbArtUrl(url: string): TmdbArtRef | undefined {
+/** Parses and validates a cached-artwork URL; undefined when it is not one (or fails validation). */
+export function parseArtUrl(url: string): ArtRef | undefined {
   let parsed: URL
   try {
     parsed = new URL(url)
   } catch {
     return undefined
   }
-  if (parsed.protocol !== `${MEDIA_SCHEME}:` || parsed.hostname !== 'tmdb') return undefined
+  if (parsed.protocol !== `${MEDIA_SCHEME}:` || !(parsed.hostname in ART_SOURCES)) return undefined
+  const source = parsed.hostname as ArtSource
+  const rules = ART_SOURCES[source]
   const [key, asset] = parsed.pathname.replace(/^\//, '').split('/')
   const src = parsed.searchParams.get('src') ?? ''
-  return TMDB_CACHE_KEY.test(key) && TMDB_ASSET.test(asset) && TMDB_SRC.test(src) ? { key, asset, src } : undefined
+  if (!rules.key.test(key) || !rules.asset.test(asset) || !rules.src.test(src)) return undefined
+  // A Steam image must belong to the app its cache key names.
+  if (source === 'steam' && !src.startsWith(`store_item_assets/steam/apps/${key}/`)) return undefined
+  return { source, key, asset, src }
 }

@@ -23,8 +23,8 @@ import { indexShow } from './media'
 import type { MpvHost } from './mpv'
 import { backupSaves } from './saves'
 import { artUrlsOf, cachedArt, importTitle, METADATA_CONFIG, toHit, type ArtUrl } from './metadata'
-import type { TmdbCache } from './tmdbCache'
-import { GAME_METADATA_CONFIG, importSteamGame, remoteSteamArt, toSteamHit, type SteamArtUrl } from './gameMetadata'
+import type { ArtCache } from './artCache'
+import { cachedSteamArt, GAME_METADATA_CONFIG, importSteamGame, steamArtUrlsOf, toSteamHit, type SteamArtUrl } from './gameMetadata'
 import { SteamClient } from './steam'
 import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
@@ -38,7 +38,7 @@ export class MistService implements MistCalls {
   private readonly art: ArtUrl = cachedArt
   private readonly steam = new SteamClient()
   /** Where imported Steam artwork is referenced from. */
-  private readonly steamArt: SteamArtUrl = remoteSteamArt
+  private readonly steamArt: SteamArtUrl = cachedSteamArt
   private readonly tmdb = new TmdbClient(() => ({ key: this.repo.settings.tmdbKey, language: this.repo.settings.tmdbLanguage }))
 
   constructor(
@@ -49,7 +49,8 @@ export class MistService implements MistCalls {
     private readonly mpv: MpvHost,
     /** Library rows changed outside an IPC call (e.g. playtime after a game exits). */
     private readonly onLibraryChanged: () => void,
-    private readonly tmdbCache: TmdbCache
+    private readonly tmdbCache: ArtCache,
+    private readonly steamCache: ArtCache
   ) {}
 
   snapshot(): Snapshot {
@@ -290,11 +291,13 @@ export class MistService implements MistCalls {
   async addGameFromSteam(appId: number, source?: { input: string; shape: SourceShape }): Promise<ActionResult> {
     let imported
     try {
-      imported = await importSteamGame(this.steam, this.repo, appId, this.steamArt)
+      imported = await importSteamGame(this.steam, this.repo, this.steamCache, appId, this.steamArt)
     } catch (error) {
       return { ok: false, message: (error as Error).message }
     }
     const { game, created } = imported
+    // Warm the artwork cache in the background so the game's art works offline from here on.
+    void this.steamCache.prefetch(steamArtUrlsOf(game))
     const added = await this.addGame(game.id, source)
     if (!added.ok) return added
     const facts = [game.genres?.slice(0, 3).join(', '), game.releaseDate && `released ${game.releaseDate}`].filter(Boolean).join(' · ')

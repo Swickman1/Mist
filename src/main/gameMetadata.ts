@@ -1,7 +1,9 @@
 // Maps Steam store data onto Mist's Game rows. Used by add (create) and refresh
 // (update): metadata fields only. source, shape, parts, manifest, exeHint,
 // version, size and library rows are never touched.
+import { artUrl } from '../shared/media'
 import type { Game, SteamHit } from '../shared/types'
+import type { ArtCache } from './artCache'
 import type { Repository } from './repository'
 import { STEAM_CONFIG, type SteamAppDetails, type SteamClient, type SteamSearchItem } from './steam'
 
@@ -14,10 +16,17 @@ export const GAME_METADATA_CONFIG = {
 
 export type SteamArtAsset = 'capsule' | 'hero' | 'header'
 
-/** Where a stored Steam image is referenced from: remote here; the cache (task 3) points it at mist-media. */
+/** Where a stored Steam image is referenced from. */
 export type SteamArtUrl = (ref: { appId: number; asset: SteamArtAsset; url: string }) => string
 
-export const remoteSteamArt: SteamArtUrl = ({ url }) => url
+/** Stored artwork goes through mist-media://steam, served from userData/steam-cache (remote only on a miss). */
+export const cachedSteamArt: SteamArtUrl = ({ appId, asset, url }) => {
+  const prefix = `${STEAM_CONFIG.imageBase}/`
+  return url.startsWith(prefix) ? artUrl({ source: 'steam', key: String(appId), asset, src: url.slice(prefix.length) }) : url
+}
+
+/** appdetails is cached as <appid>/appdetails.json. */
+export const APPDETAILS_JSON = 'appdetails'
 
 export function gameIdFor(appId: number): string {
   return `g-steam-${appId}`
@@ -70,11 +79,21 @@ export interface SteamImportResult {
 }
 
 /**
- * Upserts the Game row for a Steam app from its store details. `details` lets a
- * caller pass cached JSON instead of calling appdetails again.
+ * Upserts the Game row for a Steam app from its store details. Steam rate-limits
+ * appdetails, so the cached JSON is used when present unless `fresh` (refresh).
  */
-export async function importSteamGame(steam: SteamClient, repo: Repository, appId: number, art: SteamArtUrl, cached?: SteamAppDetails): Promise<SteamImportResult> {
+export async function importSteamGame(
+  steam: SteamClient,
+  repo: Repository,
+  cache: ArtCache,
+  appId: number,
+  art: SteamArtUrl,
+  fresh = false
+): Promise<SteamImportResult> {
+  const key = String(appId)
+  const cached = fresh ? undefined : await cache.readJson<SteamAppDetails>(key, APPDETAILS_JSON)
   const details = cached ?? (await steam.appDetails(appId))
+  if (!cached) await cache.writeJson(key, APPDETAILS_JSON, details)
   if (details.type !== 'game') throw new Error(`“${details.name}” is ${details.type} content on Steam, not a game`)
 
   const header = withoutQuery(details.header_image)
@@ -100,4 +119,29 @@ export async function importSteamGame(steam: SteamClient, repo: Repository, appI
     : { id, ...metadata, version: '—', sizeBytes: 0, vetted: false, addedAt: Date.now() }
   repo.games.put(game)
   return { game, created: !existing, details }
+}
+
+/** A game's stored artwork URLs (cover, hero, header), for warming or pruning the cache. */
+export function steamArtUrlsOf(game: Game): string[] {
+  return [game.art, game.hero, game.header].filter((url): url is string => Boolean(url))
+}
+
+/** Steam rows stored before the cache existed (remote steamstatic URLs) switch to cached mist-media URLs. */
+export function migrateRemoteSteamArt(repo: Repository): number {
+  let changed = 0
+  for (const game of repo.games.all()) {
+    if (!game.steamAppId) continue
+    const appId = game.steamAppId
+    const next = {
+      ...game,
+      art: cachedSteamArt({ appId, asset: 'capsule', url: game.art }),
+      hero: cachedSteamArt({ appId, asset: 'hero', url: game.hero }),
+      header: game.header && cachedSteamArt({ appId, asset: 'header', url: game.header })
+    }
+    if (next.art !== game.art || next.hero !== game.hero || next.header !== game.header) {
+      repo.games.put(next)
+      changed++
+    }
+  }
+  return changed
 }

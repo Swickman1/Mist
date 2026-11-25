@@ -1,12 +1,12 @@
 // Maps TMDB titles onto Mist's Show / Episode rows. Used by add (create) and by
 // refresh (update): metadata fields are overwritten, but filePath, positionSec
 // and library rows are never touched.
-import { tmdbArtUrl } from '../shared/media'
+import { artUrl } from '../shared/media'
 import type { Episode, Show, TmdbHit, TmdbKind } from '../shared/types'
 import { makeArt } from './art'
 import type { Repository } from './repository'
 import { TMDB_CONFIG, tmdbImageUrl, type TmdbClient, type TmdbMovieResult, type TmdbTvResult } from './tmdb'
-import type { TmdbCache } from './tmdbCache'
+import type { ArtCache } from './artCache'
 
 export const METADATA_CONFIG = {
   sizes: { poster: 'w500', hero: 'w1280', still: 'w300', searchPoster: 'w185' },
@@ -28,7 +28,8 @@ export function cacheKey(kind: TmdbKind, tmdbId: number): string {
 }
 
 /** Stored artwork goes through mist-media://tmdb, served from userData/tmdb-cache (remote only on a miss). */
-export const cachedArt: ArtUrl = ({ kind, tmdbId, asset, size, path }) => tmdbArtUrl({ key: cacheKey(kind, tmdbId), asset, src: `${size}${path}` })
+export const cachedArt: ArtUrl = ({ kind, tmdbId, asset, size, path }) =>
+  artUrl({ source: 'tmdb', key: cacheKey(kind, tmdbId), asset, src: `${size}${path}` })
 
 export function showIdFor(kind: TmdbKind, tmdbId: number): string {
   return `s-tmdb-${kind}-${tmdbId}`
@@ -76,7 +77,7 @@ export interface ImportResult {
 export async function importTitle(
   tmdb: TmdbClient,
   repo: Repository,
-  cache: TmdbCache,
+  cache: ArtCache,
   kind: TmdbKind,
   tmdbId: number,
   art: ArtUrl

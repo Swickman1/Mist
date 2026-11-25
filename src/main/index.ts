@@ -10,7 +10,10 @@ import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media
 import { migrateRemoteArt } from './metadata'
 import { Repository } from './repository'
 import { MistService } from './service'
-import { TmdbCache } from './tmdbCache'
+import { ArtCache } from './artCache'
+import { migrateRemoteSteamArt } from './gameMetadata'
+import { STEAM_CONFIG } from './steam'
+import { TMDB_CONFIG } from './tmdb'
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 let mainWindow: BrowserWindow | undefined
@@ -91,7 +94,8 @@ app.whenReady().then(() => {
     () => broadcast(IPC.snapshot, service.snapshot())
   )
   const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event), mpvPids)
-  const tmdbCache = new TmdbCache(app.getPath('userData'))
+  const tmdbCache = new ArtCache(app.getPath('userData'), 'tmdb-cache', 'tmdb', TMDB_CONFIG.imageBase)
+  const steamCache = new ArtCache(app.getPath('userData'), 'steam-cache', 'steam', STEAM_CONFIG.imageBase)
   const service: MistService = new MistService(
     repo,
     runner,
@@ -99,7 +103,8 @@ app.whenReady().then(() => {
     () => mainWindow,
     mpv,
     () => broadcast(IPC.snapshot, service.snapshot()),
-    tmdbCache
+    tmdbCache,
+    steamCache
   )
 
   ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {
@@ -111,7 +116,8 @@ app.whenReady().then(() => {
 
   reconcileInstalled(repo)
   migrateRemoteArt(repo)
-  handleMediaRequests(repo, tmdbCache)
+  migrateRemoteSteamArt(repo)
+  handleMediaRequests(repo, { tmdb: tmdbCache, steam: steamCache })
   void indexAllShows(repo).then((changed) => changed && broadcast(IPC.snapshot, service.snapshot()))
   runner.start()
   mainWindow = createWindow(repo.settings.theme)
