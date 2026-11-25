@@ -10,7 +10,10 @@ export const SUGGESTED_DOWNLOAD_HOSTS = [
   'api.github.com',
   'objects.githubusercontent.com',
   'release-assets.githubusercontent.com',
-  'archive.org'
+  'archive.org',
+  'gog-games.to',
+  'steamrip.com',
+  'fitgirl-repacks.site'
 ]
 
 export const NET_CONFIG = {

@@ -20,7 +20,7 @@ export interface BundledIndexFile {
 }
 
 /** First bundled catalog slices; more files can be added over time. */
-export const BUNDLED_FILES = ['games.json'] as const
+export const BUNDLED_FILES = ['games.json', 'catalog-extra.json'] as const
 
 function asObject(value: unknown, where: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${where} must be an object`)
