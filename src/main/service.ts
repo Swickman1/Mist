@@ -22,7 +22,7 @@ import { launchGame } from './install'
 import { indexShow } from './media'
 import type { MpvHost } from './mpv'
 import { backupSaves } from './saves'
-import { artUrlsOf, cachedArt, importTitle, METADATA_CONFIG, toHit, type ArtUrl } from './metadata'
+import { artUrlsOf, cacheKey, cachedArt, importTitle, METADATA_CONFIG, toHit, type ArtUrl } from './metadata'
 import type { ArtCache } from './artCache'
 import { cachedSteamArt, GAME_METADATA_CONFIG, importSteamGame, steamArtUrlsOf, toSteamHit, type SteamArtUrl } from './gameMetadata'
 import { SteamClient } from './steam'
@@ -304,6 +304,22 @@ export class MistService implements MistCalls {
     return { ok: true, message: `${game.title} ${created ? 'added' : 'metadata updated'}${facts ? ` · ${facts}` : ''}` }
   }
 
+  async refreshGameMetadata(gameId: string): Promise<ActionResult> {
+    const before = this.repo.games.get(gameId)
+    if (!before?.steamAppId) return { ok: false, message: 'This game is not linked to a Steam store page' }
+    let imported
+    try {
+      // fresh: the one place appdetails is called again for a cached app.
+      imported = await importSteamGame(this.steam, this.repo, this.steamCache, before.steamAppId, this.steamArt, true)
+    } catch (error) {
+      return { ok: false, message: (error as Error).message }
+    }
+    const { game } = imported
+    const pruned = await this.steamCache.prune(String(before.steamAppId), steamArtUrlsOf(game))
+    void this.steamCache.prefetch(steamArtUrlsOf(game))
+    return { ok: true, message: `${game.title} refreshed${pruned ? ` · ${pruned} stale image(s) removed` : ''}` }
+  }
+
   async refreshMetadata(showId: string): Promise<ActionResult> {
     const show = this.repo.shows.get(showId)
     if (!show?.tmdbKind || !show.tmdbId) return { ok: false, message: 'This title was not imported from TMDB' }
@@ -313,6 +329,7 @@ export class MistService implements MistCalls {
     } catch (error) {
       return { ok: false, message: (error as Error).message }
     }
+    await this.tmdbCache.prune(cacheKey(show.tmdbKind, show.tmdbId), artUrlsOf(this.repo, showId))
     void this.tmdbCache.prefetch(artUrlsOf(this.repo, showId))
     const { created, updated } = imported
     return { ok: true, message: `${imported.show.title} refreshed · ${updated} episode(s) updated${created ? `, ${created} new` : ''}` }

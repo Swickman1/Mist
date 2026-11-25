@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import type { DownloadJob, LibraryEntry } from '../../../shared/types'
 import { AddSourcePanel, type SourceDraft } from '../components/AddSourcePanel'
@@ -28,6 +29,7 @@ function formatLastPlayed(at: number | undefined): string {
 export function GamePage() {
   const { id } = useParams()
   const { snapshot, notify } = useMist()
+  const [refreshing, setRefreshing] = useState(false)
   const game = snapshot.games.find((g) => g.id === id)
   if (!game) return <div className="page empty">Game not found.</div>
 
@@ -86,6 +88,19 @@ export function GamePage() {
               }}
             >
               Uninstall
+            </button>
+          )}
+          {game.steamAppId && (
+            <button
+              className="btn btn--ghost"
+              disabled={refreshing}
+              onClick={async () => {
+                setRefreshing(true)
+                notify(await api.refreshGameMetadata(game.id))
+                setRefreshing(false)
+              }}
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh metadata'}
             </button>
           )}
         </div>

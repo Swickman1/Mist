@@ -273,6 +273,8 @@ export interface MistCalls {
   steamSearch(query: string): Promise<SteamSearchResult>
   /** Creates (or updates the metadata of) a game from its Steam store page, then adds it to the library. */
   addGameFromSteam(appId: number, source?: { input: string; shape: SourceShape }): Promise<ActionResult>
+  /** Re-fetches a Steam-linked game's store page: metadata only, never source, manifest, exeHint or library rows. */
+  refreshGameMetadata(gameId: string): Promise<ActionResult>
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -311,7 +313,8 @@ export const MIST_METHODS = [
   'addShowFromTmdb',
   'refreshMetadata',
   'steamSearch',
-  'addGameFromSteam'
+  'addGameFromSteam',
+  'refreshGameMetadata'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
