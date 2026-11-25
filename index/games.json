@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-25T00:00:00Z",
+  "items": [
+    {
+      "title": "Freedoom",
+      "pageUrl": "https://github.com/freedoom/freedoom/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "OpenTTD",
+      "pageUrl": "https://github.com/OpenTTD/OpenTTD/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "SuperTuxKart",
+      "pageUrl": "https://github.com/supertuxkart/stk-code/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "0 A.D.",
+      "pageUrl": "https://github.com/0ad/0ad/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "Mindustry",
+      "pageUrl": "https://github.com/Anuken/Mindustry/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "Xonotic",
+      "pageUrl": "https://github.com/xonotic/xonotic/releases/latest",
+      "sizeBytes": 0
+    }
+  ]
+}
