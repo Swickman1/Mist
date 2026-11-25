@@ -346,11 +346,17 @@ class Session {
   }
 
   /** Covers the whole display the player is on (the app window stays behind). */
-  enterFullscreen(): void {
+  /** Covers the whole display; floats above the taskbar only while Mist or mpv has focus. */
+  enterFullscreen(hostFocused: boolean): void {
     const display = screen.getDisplayMatching(this.window.getBounds())
-    this.window.setAlwaysOnTop(true, 'screen-saver')
+    this.setOnTop(hostFocused || this.window.isFocused())
     this.window.setBounds(display.bounds)
     this.send(['set', 'fullscreen', 'yes'])
+  }
+
+  setOnTop(onTop: boolean): void {
+    if (onTop) this.window.setAlwaysOnTop(true, 'screen-saver')
+    else this.window.setAlwaysOnTop(false)
   }
 
   exitFullscreen(bounds: PlayerBounds): void {
@@ -450,11 +456,39 @@ export class MpvHost {
     if (!this.fullscreen) this.session?.setBounds(bounds)
   }
 
+  /** Focus on the app window or mpv's window: float above everything again. */
+  private readonly onFocus = () => {
+    if (this.fullscreen) this.session?.setOnTop(true)
+  }
+
+  /** Blur: once focus has settled, drop the level unless the other of the two windows took it. */
+  private readonly onBlur = () =>
+    setImmediate(() => {
+      const session = this.session
+      if (!this.fullscreen || !session) return
+      if (!this.host()?.isFocused() && !session.window.isFocused()) session.setOnTop(false)
+    })
+
+  private watchFocus(session: Session, watch: boolean): void {
+    const host = this.host()
+    for (const win of [host, session.window]) {
+      if (!win || win.isDestroyed()) continue
+      if (watch) {
+        win.on('focus', this.onFocus)
+        win.on('blur', this.onBlur)
+      } else {
+        win.off('focus', this.onFocus)
+        win.off('blur', this.onBlur)
+      }
+    }
+  }
+
   toggleFullscreen(): void {
     const session = this.session
     if (!session || !this.bounds) return
     this.fullscreen = !this.fullscreen
-    if (this.fullscreen) session.enterFullscreen()
+    this.watchFocus(session, this.fullscreen)
+    if (this.fullscreen) session.enterFullscreen(this.host()?.isFocused() ?? false)
     else session.exitFullscreen(this.bounds)
   }
 
@@ -467,6 +501,7 @@ export class MpvHost {
     const session = this.session
     if (!session) return null
     this.session = undefined
+    if (this.fullscreen) this.watchFocus(session, false)
     this.fullscreen = false
     const win = this.host()
     win?.off('move', this.follow)
