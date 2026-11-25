@@ -159,6 +159,8 @@ interface GithubReleaseAsset {
 
 interface GithubRelease {
   assets: GithubReleaseAsset[]
+  prerelease?: boolean
+  draft?: boolean
 }
 
 interface GithubReleaseRef {
@@ -168,6 +170,8 @@ interface GithubReleaseRef {
 }
 
 const GITHUB_API_TIMEOUT_MS = 20_000
+/** Most parts one release may contribute; rolling tags (Veloren nightly) pile up hundreds of builds. */
+const MAX_RELEASE_PARTS = 20
 
 function githubReleaseRef(input: URL): GithubReleaseRef | undefined {
   if (input.hostname.toLowerCase().replace(/\.$/, '') !== 'github.com') return undefined
@@ -194,10 +198,8 @@ function isGithubRateLimit(response: Response, body: string): boolean {
   return /rate limit/i.test(body)
 }
 
-async function fetchGithubRelease(url: URL, http: HttpContext): Promise<GithubRelease | undefined> {
-  const release = githubReleaseRef(url)
-  if (!release) return undefined
-  const apiUrl = `https://api.github.com/repos/${release.owner}/${release.repo}/${release.apiPath}`
+async function fetchGithubJson(apiPath: string, release: GithubReleaseRef, http: HttpContext): Promise<unknown> {
+  const apiUrl = `https://api.github.com/repos/${release.owner}/${release.repo}/${apiPath}`
   const { response, url: finalUrl } = await httpFetch(
     apiUrl,
     {
@@ -209,9 +211,22 @@ async function fetchGithubRelease(url: URL, http: HttpContext): Promise<GithubRe
   const body = await response.text()
   if (isGithubRateLimit(response, body)) throw new Error('blocked: GitHub API rate limit exceeded; retry in a minute')
   if (!response.ok) throw new Error(`${new URL(finalUrl).hostname} answered HTTP ${response.status} for ${apiUrl}`)
-  const parsed = JSON.parse(body) as Partial<GithubRelease>
-  if (!Array.isArray(parsed.assets)) throw new Error('GitHub release API response is missing assets')
-  return { assets: parsed.assets }
+  return JSON.parse(body)
+}
+
+async function fetchGithubRelease(url: URL, http: HttpContext): Promise<GithubRelease | undefined> {
+  const ref = githubReleaseRef(url)
+  if (!ref) return undefined
+  let release = (await fetchGithubJson(ref.apiPath, ref, http)) as Partial<GithubRelease>
+  if (ref.apiPath === 'releases/latest' && release.prerelease) {
+    // "latest" handed back a prerelease: take the newest stable release from the list instead (one retry).
+    const list = (await fetchGithubJson('releases', ref, http)) as Partial<GithubRelease>[]
+    const stable = Array.isArray(list) ? list.find((entry) => !entry.prerelease && !entry.draft) : undefined
+    if (!stable) throw new Error('GitHub has no stable release for this project')
+    release = stable
+  }
+  if (!Array.isArray(release.assets)) throw new Error('GitHub release API response is missing assets')
+  return { assets: release.assets }
 }
 
 async function githubReleaseParts(url: URL, http: HttpContext): Promise<Part[] | undefined> {
@@ -236,7 +251,9 @@ async function githubReleaseParts(url: URL, http: HttpContext): Promise<Part[] |
     if (!ARCHIVE_PATTERN.test(asset.name) || !(asset.size > 0)) continue
     archives.push(asset)
   }
-  for (const asset of windowsBuild(archives)) {
+  const build = windowsBuild(archives).sort((a, b) => naturally.compare(a.name, b.name))
+  if (build.length > MAX_RELEASE_PARTS) console.warn(`[mist] release ${url.href} has ${build.length} Windows parts; dropped ${build.length - MAX_RELEASE_PARTS} past the cap of ${MAX_RELEASE_PARTS}`)
+  for (const asset of build.slice(0, MAX_RELEASE_PARTS)) {
     checkHost(asset.browser_download_url, http.hosts())
     parts.push({
       name: asset.name,
