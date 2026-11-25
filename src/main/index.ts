@@ -34,12 +34,13 @@ function allowedHttpsHosts(downloadHosts: readonly string[]): string[] {
 /** Resource types the embedded player's own page may load once it is framed. */
 const EMBED_RESOURCE_TYPES = ['xhr', 'script', 'stylesheet', 'image', 'media', 'font']
 
-/** The iframe player: frames of an EMBED_HOSTS page, and that page's own subresources (by referrer). */
+/** The iframe player: frames of EMBED_HOSTS, their subresources on EMBED_HOSTS, and anything an EMBED_HOSTS page requests (by referrer). */
 function embedAllowed(details: Electron.OnBeforeRequestListenerDetails, url: URL): boolean {
   if (url.protocol !== 'https:') return false
-  if (details.resourceType === 'subFrame') return hostAllowed(url.hostname, EMBED_HOSTS)
-  if (!details.referrer || !EMBED_RESOURCE_TYPES.includes(details.resourceType)) return false
-  return hostAllowed(new URL(details.referrer).hostname, EMBED_HOSTS)
+  const toEmbedHost = hostAllowed(url.hostname, EMBED_HOSTS)
+  if (details.resourceType === 'subFrame') return toEmbedHost
+  if (!EMBED_RESOURCE_TYPES.includes(details.resourceType)) return false
+  return toEmbedHost || (details.referrer !== '' && hostAllowed(new URL(details.referrer).hostname, EMBED_HOSTS))
 }
 
 /** Everything outside the local protocols, the dev server and the allowlist is cancelled and logged. */

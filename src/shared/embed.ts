@@ -1,13 +1,22 @@
-// Embedded (iframe) playback: the hosts the player may frame, and the embed URL for a show.
-// Swapping embedder is a change to this file only; the CSP in src/renderer/index.html
-// must list the same host, because a CSP is fixed when the page loads.
+// Embedded (iframe) playback. EMBED_HOSTS is the one list everything else derives from:
+// the session guard (src/main/index.ts) and the CSP's frame-src, connect-src, img-src and
+// media-src (filled in at build time by electron.vite.config.ts, because a CSP is fixed
+// when the page loads). Switching embedder means editing this list and EMBED_URL only.
 import type { Show } from './types'
 
-/** Hosts the iframe player may load, subdomains included. The first one builds embed URLs. */
-export const EMBED_HOSTS: readonly string[] = ['www.youtube-nocookie.com']
+/** Hosts the iframe player and its page may reach, subdomains included. */
+export const EMBED_HOSTS: readonly string[] = ['youtube-nocookie.com', 'youtube.com', 'ytimg.com', 'googlevideo.com']
+
+/** Embed page URL prefix; the video id follows. Its host must be covered by EMBED_HOSTS. */
+const EMBED_URL = 'https://www.youtube-nocookie.com/embed/'
+
+/** CSP source list for EMBED_HOSTS: each host and its subdomains, https only. */
+export function embedCspSources(): string {
+  return EMBED_HOSTS.flatMap((host) => [`https://${host}`, `https://*.${host}`]).join(' ')
+}
 
 /** The show's trailer as an embed URL, or undefined when TMDB listed none. */
 export function embedUrlFor(show: Show): string | undefined {
   if (!show.trailerKey) return undefined
-  return `https://${EMBED_HOSTS[0]}/embed/${encodeURIComponent(show.trailerKey)}?autoplay=1&rel=0`
+  return `${EMBED_URL}${encodeURIComponent(show.trailerKey)}?autoplay=1&rel=0`
 }

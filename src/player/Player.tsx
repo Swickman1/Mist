@@ -37,7 +37,11 @@ export function Player(props: PlayerProps) {
     props.onPosition(positionSec)
   }
 
-  if (!props.filePath && props.embedUrl) return <IframePlayer {...props} embedUrl={props.embedUrl} />
+  // The iframe only plays when there is no local file, gets no start position (no resume),
+  // and is the only backend whose positions are written for a file-less episode.
+  if (!props.filePath && props.embedUrl) {
+    return <IframePlayer title={props.title} subtitle={props.subtitle} embedUrl={props.embedUrl} embedLabel={props.embedLabel} onPosition={props.onPosition} />
+  }
 
   if (!props.filePath || fallback !== null) {
     return (

@@ -1,5 +1,7 @@
 // Iframe backend: plays an embed page from EMBED_HOSTS when there is no local file.
 // Needs no file and no download host; whether the page plays is up to the third party.
+// It never resumes: the embed always starts where the page starts, so a position written
+// here (e.g. from a trailer) is never used as a starting point by this backend.
 import { useEffect, useRef, useState } from 'react'
 import { EMBED_HOSTS } from '../shared/embed'
 import { hostAllowed } from '../shared/hosts'
@@ -27,7 +29,13 @@ function fromEmbedHost(origin: string): boolean {
   }
 }
 
-export function IframePlayer({ title, subtitle, embedUrl, embedLabel, onPosition }: PlayerProps & { embedUrl: string }) {
+export function IframePlayer({
+  title,
+  subtitle,
+  embedUrl,
+  embedLabel,
+  onPosition
+}: Pick<PlayerProps, 'title' | 'subtitle' | 'embedLabel' | 'onPosition'> & { embedUrl: string }) {
   const [alive, setAlive] = useState(false)
   const [failed, setFailed] = useState(false)
   const latest = useRef<number | undefined>(undefined)
