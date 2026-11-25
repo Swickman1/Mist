@@ -43,6 +43,22 @@ export interface Game {
   addedAt: number
 }
 
+export type TmdbKind = 'tv' | 'movie'
+
+/** One TMDB search result as shown in the add flow. */
+export interface TmdbHit {
+  tmdbId: number
+  kind: TmdbKind
+  title: string
+  year?: number
+  /** Small remote poster for the result list, when TMDB has one. */
+  posterUrl?: string
+  overview: string
+  rating: number
+}
+
+export type TmdbSearchResult = { ok: true; hits: TmdbHit[] } | { ok: false; error: string }
+
 export interface Show {
   id: string
   title: string
@@ -51,8 +67,10 @@ export interface Show {
   year: number
   rating: number
   seasons: number[]
-  /** TMDB id, metadata only. */
+  /** TMDB id. With tmdbKind set, the show was imported from TMDB and can be refreshed. */
   tmdbId?: number
+  tmdbKind?: TmdbKind
+  overview?: string
 }
 
 export interface Episode {
@@ -66,6 +84,7 @@ export interface Episode {
   positionSec: number
   /** The episode's video file inside its show folder, when found on disk. */
   filePath?: string
+  overview?: string
 }
 
 export type LibraryState = 'ready' | 'missing' | 'update'
@@ -227,6 +246,9 @@ export interface MistCalls {
   playerKey(key: string): void
   /** Checks the TMDB key in settings against the API. */
   tmdbTest(): Promise<ActionResult>
+  tmdbSearch(kind: TmdbKind, query: string): Promise<TmdbSearchResult>
+  /** Creates (or updates) the show/movie from TMDB with its seasons and episodes, then adds it to the library. */
+  addShowFromTmdb(kind: TmdbKind, tmdbId: number, path?: string): Promise<ActionResult>
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -260,7 +282,9 @@ export const MIST_METHODS = [
   'playerBounds',
   'playerClose',
   'playerKey',
-  'tmdbTest'
+  'tmdbTest',
+  'tmdbSearch',
+  'addShowFromTmdb'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
@@ -268,7 +292,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch']
 
 export const IPC = {
   call: 'mist:call',

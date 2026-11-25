@@ -1,6 +1,18 @@
 // MistService: every renderer call lands here. Owns the repository and job runner.
 import { app, BrowserWindow, dialog } from 'electron'
-import type { ActionResult, LibraryEntry, MistCalls, PlayerBounds, PlayerOpenRequest, PlayerOpenResult, Settings, Snapshot, SourceShape } from '../shared/types'
+import type {
+  ActionResult,
+  LibraryEntry,
+  MistCalls,
+  PlayerBounds,
+  PlayerOpenRequest,
+  PlayerOpenResult,
+  Settings,
+  Snapshot,
+  SourceShape,
+  TmdbKind,
+  TmdbSearchResult
+} from '../shared/types'
 import { resolverFor } from '../sources'
 import { sha256Parts } from '../verify'
 import { existsSync } from 'node:fs'
@@ -9,6 +21,7 @@ import { launchGame } from './install'
 import { indexShow } from './media'
 import type { MpvHost } from './mpv'
 import { backupSaves } from './saves'
+import { importTitle, METADATA_CONFIG, remoteArt, toHit, type ArtUrl } from './metadata'
 import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
@@ -17,6 +30,8 @@ import type { Repository } from './repository'
 const MIN_PLAYTIME_RUN_SEC = 10
 
 export class MistService implements MistCalls {
+  /** Where imported TMDB artwork is referenced from. */
+  private readonly art: ArtUrl = remoteArt
   private readonly tmdb = new TmdbClient(() => ({ key: this.repo.settings.tmdbKey, language: this.repo.settings.tmdbLanguage }))
 
   constructor(
@@ -222,6 +237,33 @@ export class MistService implements MistCalls {
 
   playerKey(key: string): void {
     this.mpv.key(key)
+  }
+
+  async tmdbSearch(kind: TmdbKind, query: string): Promise<TmdbSearchResult> {
+    if (query.trim().length < 2) return { ok: true, hits: [] }
+    try {
+      const page = kind === 'tv' ? await this.tmdb.searchTv(query.trim()) : await this.tmdb.searchMovie(query.trim())
+      return { ok: true, hits: page.results.slice(0, METADATA_CONFIG.searchResultLimit).map((result) => toHit(kind, result)) }
+    } catch (error) {
+      return { ok: false, error: (error as Error).message }
+    }
+  }
+
+  async addShowFromTmdb(kind: TmdbKind, tmdbId: number, path?: string): Promise<ActionResult> {
+    let imported
+    try {
+      imported = await importTitle(this.tmdb, this.repo, kind, tmdbId, this.art)
+    } catch (error) {
+      return { ok: false, message: (error as Error).message }
+    }
+    const { show, created, updated } = imported
+    await this.addShow(show.id, path)
+    const what =
+      kind === 'movie'
+        ? `movie, ${created ? '1 episode created' : '1 episode updated'}`
+        : `${created} episode${created === 1 ? '' : 's'} created${updated ? `, ${updated} updated` : ''}`
+    const files = path ? ` · ${this.repo.episodes.all().filter((episode) => episode.showId === show.id && episode.filePath).length} video file(s) found` : ''
+    return { ok: true, message: `${show.title} added · ${what}${files}` }
   }
 
   async tmdbTest(): Promise<ActionResult> {
