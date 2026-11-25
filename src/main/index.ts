@@ -19,6 +19,7 @@ import { TMDB_CONFIG } from './tmdb'
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 let mainWindow: BrowserWindow | undefined
+const APP_PARTITION = 'persist:mist'
 
 /** Local protocols Mist always serves from disk or memory. */
 const LOCAL_PROTOCOLS = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:', `${MEDIA_SCHEME}:`]
@@ -44,10 +45,10 @@ function embedAllowed(details: Electron.OnBeforeRequestListenerDetails, url: URL
 }
 
 /** Everything outside the local protocols, the dev server and the allowlist is cancelled and logged. */
-function blockNetwork(downloadHosts: () => readonly string[]): void {
+function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonly string[]): void {
   const devOrigin = devServerUrl ? new URL(devServerUrl) : undefined
   const loggedEmbedHosts = new Set<string>()
-  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+  appSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url)
     const local = LOCAL_PROTOCOLS.includes(url.protocol)
     const devServer = devOrigin !== undefined && url.host === devOrigin.host && ['http:', 'ws:'].includes(url.protocol)
@@ -68,8 +69,8 @@ function blockNetwork(downloadHosts: () => readonly string[]): void {
  * embedder refuses to play (YouTube: Error 153). Native apps identify themselves
  * by app id instead, as embedders ask apps to.
  */
-function identifyEmbedFrames(): void {
-  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+function identifyEmbedFrames(appSession: Electron.Session): void {
+  appSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const frame = details.resourceType === 'subFrame' && hostAllowed(new URL(details.url).hostname, EMBED_HOSTS)
     callback({ requestHeaders: frame ? { ...details.requestHeaders, Referer: `https://${APP_ID}/` } : details.requestHeaders })
   })
@@ -89,6 +90,7 @@ function createWindow(theme: Theme): BrowserWindow {
     icon: appIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      partition: APP_PARTITION,
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false
@@ -118,6 +120,8 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
+  const appSession = session.fromPartition(APP_PARTITION)
+
   // mpv processes left by a crash or hard kill of the previous run.
   const mpvPids = new MpvPidFile(join(app.getPath('userData'), 'mpv-pids.json'))
   const swept = mpvPids.sweep()
@@ -125,8 +129,8 @@ app.whenReady().then(async () => {
 
   const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
   // The session guard reads the download hosts live, so Settings edits apply at once.
-  blockNetwork(() => repo.settings.downloadHosts)
-  identifyEmbedFrames()
+  blockNetwork(appSession, () => repo.settings.downloadHosts)
+  identifyEmbedFrames(appSession)
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
   /** Allowlist (read live from settings) + User-Agent for every URL source. */
   const http = { hosts: () => repo.settings.downloadHosts, userAgent: `Mist/${app.getVersion()}` }

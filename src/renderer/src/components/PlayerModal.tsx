@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Player } from '../../../player'
-import { embedUrlFor } from '../../../shared/embed'
+import { embedUrlFor, trailerUrlFor } from '../../../shared/embed'
 import { episodeLabel, entryFor } from '../selectors'
 import { api, useMist } from '../store'
 import { Modal } from './Modal'
@@ -25,7 +25,7 @@ export function PlayerModal() {
         title={`${show.title} · ${episodeLabel(episode)}`}
         subtitle={episode.title}
         filePath={episode.filePath}
-        embedUrl={episode.filePath ? undefined : embedUrlFor(show)}
+        embedUrl={episode.filePath ? undefined : embedUrlFor(show, episode) ?? trailerUrlFor(show)}
         embedLabel="Trailer · no file for this episode"
         poster={episode.still}
         startAtSec={episode.positionSec}
