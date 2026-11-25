@@ -94,12 +94,14 @@ app.whenReady().then(() => {
   // The session guard reads the download hosts live, so Settings edits apply at once.
   blockNetwork(() => repo.settings.downloadHosts)
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
+  /** Allowlist (read live from settings) + User-Agent for every URL source. */
+  const http = { hosts: () => repo.settings.downloadHosts, userAgent: `Mist/${app.getVersion()}` }
   const runner = new JobRunner(
     repo,
     (game, stagingDir, signal) => installGame(game, stagingDir, repo.settings.libraryPath, signal),
     (jobs) => broadcast(IPC.jobs, jobs),
     () => broadcast(IPC.snapshot, service.snapshot()),
-    { hosts: () => repo.settings.downloadHosts, userAgent: `Mist/${app.getVersion()}` }
+    http
   )
   const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event), mpvPids)
   const tmdbCache = new ArtCache(app.getPath('userData'), 'tmdb-cache', 'tmdb', TMDB_CONFIG.imageBase)
@@ -112,7 +114,8 @@ app.whenReady().then(() => {
     mpv,
     () => broadcast(IPC.snapshot, service.snapshot()),
     tmdbCache,
-    steamCache
+    steamCache,
+    http
   )
 
   ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {

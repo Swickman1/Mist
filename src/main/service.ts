@@ -25,7 +25,7 @@ import { backupSaves } from './saves'
 import { artUrlsOf, cacheKey, cachedArt, importTitle, METADATA_CONFIG, toHit, type ArtUrl } from './metadata'
 import type { ArtCache } from './artCache'
 import { cachedSteamArt, GAME_METADATA_CONFIG, importSteamGame, steamArtUrlsOf, toSteamHit, type SteamArtUrl } from './gameMetadata'
-import { normaliseHosts, SUGGESTED_DOWNLOAD_HOSTS } from './net'
+import { normaliseHosts, SUGGESTED_DOWNLOAD_HOSTS, type HttpContext } from './net'
 import { SteamClient } from './steam'
 import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
@@ -51,7 +51,9 @@ export class MistService implements MistCalls {
     /** Library rows changed outside an IPC call (e.g. playtime after a game exits). */
     private readonly onLibraryChanged: () => void,
     private readonly tmdbCache: ArtCache,
-    private readonly steamCache: ArtCache
+    private readonly steamCache: ArtCache,
+    /** Allowlist + User-Agent for URL sources (shared with the job runner). */
+    private readonly http: HttpContext
   ) {}
 
   snapshot(): Snapshot {
@@ -148,7 +150,7 @@ export class MistService implements MistCalls {
     const { manifest: _stale, ...game } = this.repo.games.get(gameId)!
     this.repo.games.put({ ...game, source: input, shape })
     try {
-      const parts = await resolverFor(shape).resolve({ gameId, input, shape })
+      const parts = await resolverFor(shape).resolve({ gameId, input, shape, http: this.http })
       this.repo.games.put({ ...game, source: input, shape, parts })
       return { ok: true, message: `Source resolved into ${parts.length} part(s)` }
     } catch (error) {

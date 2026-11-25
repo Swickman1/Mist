@@ -260,7 +260,9 @@ export class JobRunner {
   private markInstalled(gameId: string, installed: InstallResult): void {
     const entry = this.repo.library.all().find((row) => row.kind === 'game' && row.refId === gameId)
     if (entry) this.repo.library.put({ ...entry, state: 'ready', path: installed.path })
-    if (installed.exeHint) this.repo.games.put({ ...this.repo.games.get(gameId)!, exeHint: installed.exeHint })
+    // The detected exe replaces any earlier hint; with none found the stale hint is dropped, so PLAY reports it honestly.
+    const { exeHint: _old, ...game } = this.repo.games.get(gameId)!
+    this.repo.games.put(installed.exeHint ? { ...game, exeHint: installed.exeHint } : game)
     this.onLibraryChanged()
   }
 }
