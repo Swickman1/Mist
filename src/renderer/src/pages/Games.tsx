@@ -10,6 +10,8 @@ import { ui } from '../config'
 import { entryFor, formatBytes, jobForGame, tileState } from '../selectors'
 import { useMist } from '../store'
 
+const PAGE_SIZE = 60
+
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'owned', label: 'In library' },
@@ -71,17 +73,31 @@ export function Games() {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [sort, setSort] = useState<SortKey>('title')
   const [query, setQuery] = useState('')
+  const [limit, setLimit] = useState(PAGE_SIZE)
 
-  const featured = useMemo(() => [...snapshot.games].sort((a, b) => b.addedAt - a.addedAt).slice(0, ui.spotlightCount), [snapshot.games])
+  useEffect(() => {
+    setLimit(PAGE_SIZE)
+  }, [filter, sort, query])
+
+  const featured = useMemo(
+    () => [...snapshot.games].filter((game) => game.origin !== 'index').sort((a, b) => b.addedAt - a.addedAt).slice(0, ui.spotlightCount),
+    [snapshot.games]
+  )
 
   const games = useMemo(() => {
     const q = query.trim().toLowerCase()
     const owned = (g: Game) => entryFor(snapshot, 'game', g.id) !== undefined
-    return snapshot.games
+    const sorted = snapshot.games
       .filter((g) => g.title.toLowerCase().includes(q))
       .filter((g) => filter === 'all' || (filter === 'owned') === owned(g))
       .sort(SORTS.find((s) => s.key === sort)!.compare)
+    const library = sorted.filter((game) => owned(game))
+    const index = sorted.filter((game) => !owned(game) && game.origin === 'index')
+    const rest = sorted.filter((game) => !owned(game) && game.origin !== 'index')
+    return [...library, ...index, ...rest]
   }, [snapshot, filter, sort, query])
+
+  const visibleGames = games.slice(0, limit)
 
   if (snapshot.games.length === 0) {
     return (
@@ -102,9 +118,7 @@ export function Games() {
 
       <section className="section">
         <div className="toolbar">
-          <h2 className="section__title">
-            Browse games <span>({games.length})</span>
-          </h2>
+          <h2 className="section__title">Browse games <span>({games.length})</span></h2>
           <div className="toolbar__controls">
             <div className="toolbar__search">
               <Icon name="search" />
@@ -132,18 +146,24 @@ export function Games() {
         {games.length === 0 ? (
           <p className="empty">No games match these filters.</p>
         ) : (
-          <div className="grid grid--catalog">
-            {games.map((game) => (
-              <GameTile
-                key={game.id}
-                game={game}
-                entry={entryFor(snapshot, 'game', game.id)}
-                job={jobForGame(snapshot.jobs, game.id)}
-                meta={`${formatBytes(game.sizeBytes)} · v${game.version}`}
-              />
-            ))}
-          </div>
-        )}
+            <div className="grid grid--catalog">
+              {visibleGames.map((game) => (
+                <GameTile
+                  key={game.id}
+                  game={game}
+                  entry={entryFor(snapshot, 'game', game.id)}
+                  job={jobForGame(snapshot.jobs, game.id)}
+                  className={!entryFor(snapshot, 'game', game.id) && game.origin === 'index' ? 'is-unowned' : undefined}
+                  meta={[game.sizeBytes > 0 ? formatBytes(game.sizeBytes) : undefined, game.version !== '—' ? `v${game.version}` : undefined].filter(Boolean).join(' · ')}
+                />
+              ))}
+              {games.length > visibleGames.length && (
+                <button className="tile tile--more" onClick={() => setLimit((value) => value + PAGE_SIZE)}>
+                  <span className="tile__more">Show 60 more</span>
+                </button>
+              )}
+            </div>
+          )}
       </section>
     </div>
   )

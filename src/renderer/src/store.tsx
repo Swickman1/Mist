@@ -13,10 +13,24 @@ export interface Toast {
   tone: 'info' | 'error'
 }
 
+export interface ConfirmOptions {
+  title: string
+  message: string
+  confirmLabel?: string
+  cancelLabel?: string
+}
+
+interface ConfirmState extends Required<ConfirmOptions> {
+  id: number
+}
+
 interface MistContext {
   snapshot: Snapshot
   toasts: Toast[]
   notify(result: ActionResult | string): void
+  confirm(options: ConfirmOptions): Promise<boolean>
+  confirmState: ConfirmState | null
+  resolveConfirm(confirmed: boolean): void
   addFlow: AddKind | null
   openAddFlow(kind: AddKind | null): void
   playingEpisodeId: string | null
@@ -30,10 +44,13 @@ const Context = createContext<MistContext | null>(null)
 export function MistProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const [addFlow, openAddFlow] = useState<AddKind | null>(null)
   const [playingEpisodeId, openPlayer] = useState<string | null>(null)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const toastId = useRef(0)
+  const confirmId = useRef(0)
+  const confirmResolver = useRef<((confirmed: boolean) => void) | null>(null)
 
   useEffect(() => {
     api.snapshot().then(setSnapshot)
@@ -58,6 +75,31 @@ export function MistProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((list) => list.filter((t) => t.id !== toast.id)), ui.toastMs)
   }, [])
 
+  const resolveConfirm = useCallback((confirmed: boolean) => {
+    const resolve = confirmResolver.current
+    confirmResolver.current = null
+    setConfirmState(null)
+    resolve?.(confirmed)
+  }, [])
+
+  const confirm = useCallback(
+    (options: ConfirmOptions) => {
+      resolveConfirm(false)
+      const state: ConfirmState = {
+        id: ++confirmId.current,
+        title: options.title,
+        message: options.message,
+        confirmLabel: options.confirmLabel ?? 'Confirm',
+        cancelLabel: options.cancelLabel ?? 'Cancel'
+      }
+      setConfirmState(state)
+      return new Promise<boolean>((resolve) => {
+        confirmResolver.current = resolve
+      })
+    },
+    [resolveConfirm]
+  )
+
   const toggleRail = useCallback(() => setRailCollapsed((value) => !value), [])
 
   const value = useMemo(
@@ -66,6 +108,9 @@ export function MistProvider({ children }: { children: ReactNode }) {
         snapshot,
         toasts,
         notify,
+        confirm,
+        confirmState,
+        resolveConfirm,
         addFlow,
         openAddFlow,
         playingEpisodeId,
@@ -73,7 +118,7 @@ export function MistProvider({ children }: { children: ReactNode }) {
         railCollapsed,
         toggleRail
       },
-    [snapshot, toasts, notify, addFlow, playingEpisodeId, railCollapsed, toggleRail]
+    [snapshot, toasts, notify, confirm, confirmState, resolveConfirm, addFlow, playingEpisodeId, railCollapsed, toggleRail]
   )
 
   if (!value) return <div className="boot" />

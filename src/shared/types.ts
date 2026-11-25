@@ -48,6 +48,10 @@ export interface Game {
   /** Steam's 460x215 header image. */
   header?: string
   exeHint?: string
+  /** Built-in bundled catalog row. */
+  origin?: 'index'
+  /** Which bundled index files currently list this row. */
+  indexFiles?: string[]
   vetted: boolean
   addedAt: number
 }

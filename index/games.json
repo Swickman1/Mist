@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-25T00:00:00Z",
+  "items": [
+    {
+      "title": "SuperTux",
+      "pageUrl": "https://github.com/SuperTux/supertux/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "SuperTuxKart",
+      "pageUrl": "https://github.com/supertuxkart/stk-code/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "0 A.D.",
+      "pageUrl": "https://github.com/0ad/0ad/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "Luanti",
+      "pageUrl": "https://github.com/luanti-org/luanti/releases/latest",
+      "sizeBytes": 0
+    },
+    {
+      "title": "Xonotic",
+      "pageUrl": "https://github.com/xonotic/xonotic/releases/latest",
+      "sizeBytes": 0
+    }
+  ]
+}

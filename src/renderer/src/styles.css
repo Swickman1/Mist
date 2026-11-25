@@ -843,6 +843,44 @@ img {
   color: var(--amber);
 }
 
+.chip--install {
+  color: var(--accent-strong);
+}
+
+.chip--failed,
+.chip--blocked {
+  color: var(--red);
+  border-color: rgba(239, 91, 95, 0.4);
+}
+
+button.chip--state {
+  cursor: pointer;
+}
+
+.tile--more {
+  justify-content: center;
+  align-items: center;
+  min-height: 252px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: rgba(8, 12, 16, 0.45);
+  color: var(--text-2);
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+
+.tile--more:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(12, 18, 25, 0.7);
+}
+
+.tile__more {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
 /* ---------- Progress ---------- */
 
 .progress {

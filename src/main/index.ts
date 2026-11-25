@@ -84,7 +84,7 @@ app.on('second-instance', () => {
   mainWindow.focus()
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // mpv processes left by a crash or hard kill of the previous run.
   const mpvPids = new MpvPidFile(join(app.getPath('userData'), 'mpv-pids.json'))
   const swept = mpvPids.sweep()
@@ -117,6 +117,8 @@ app.whenReady().then(() => {
     steamCache,
     http
   )
+
+  await service.importBundledIndex()
 
   ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {
     if (!MIST_METHODS.includes(method)) throw new Error(`Unknown method ${method}`)

@@ -20,6 +20,7 @@ import type {
 import { resolverFor } from '../sources'
 import { sha256Parts } from '../verify'
 import { existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { applyChrome } from './chrome'
 import { launchGame } from './install'
 import { indexShow } from './media'
@@ -33,9 +34,19 @@ import { SteamClient } from './steam'
 import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
+import { makeArt } from './art'
+import { loadBundled, type BundledIndexFile } from './catalogIndex'
 
 /** Shorter runs (crash on launch, a launcher that hands off and exits) do not count as play. */
 const MIN_PLAYTIME_RUN_SEC = 10
+
+function indexGameId(pageUrl: string): string {
+  return `g-index-${createHash('sha1').update(pageUrl).digest('hex').slice(0, 12)}`
+}
+
+function indexDescription(title: string): string {
+  return `${title} (bundled index entry)`
+}
 
 export class MistService implements MistCalls {
   /** Where imported TMDB artwork is referenced from. */
@@ -58,6 +69,11 @@ export class MistService implements MistCalls {
     /** Allowlist + User-Agent for URL sources (shared with the job runner). */
     private readonly http: HttpContext
   ) {}
+
+  async importBundledIndex(): Promise<void> {
+    const files = await loadBundled()
+    this.repo.transaction(() => this.applyBundledIndex(files))
+  }
 
   snapshot(): Snapshot {
     return {
@@ -409,5 +425,75 @@ export class MistService implements MistCalls {
 
   private entryFor(kind: LibraryEntry['kind'], refId: string): LibraryEntry | undefined {
     return this.repo.library.all().find((row) => row.kind === kind && row.refId === refId)
+  }
+
+  private applyBundledIndex(files: BundledIndexFile[]): void {
+    const now = Date.now()
+    const games = this.repo.games.all()
+    const bySource = new Map(games.map((game) => [game.source, game] as const).filter((row): row is [string, (typeof games)[number]] => row[0] !== undefined))
+    const listedByFile = new Map(files.map((file) => [file.file, new Set(file.items.map((item) => item.pageUrl))] as const))
+    const merged = new Map<string, { title: string; sizeBytes: number; files: Set<string> }>()
+
+    for (const file of files) {
+      for (const item of file.items) {
+        const current = merged.get(item.pageUrl)
+        if (current) current.files.add(file.file)
+        else merged.set(item.pageUrl, { title: item.title, sizeBytes: item.sizeBytes, files: new Set([file.file]) })
+      }
+    }
+
+    for (const [pageUrl, item] of merged) {
+      const existing = bySource.get(pageUrl)
+      const indexFiles = [...item.files].sort()
+      if (!existing) {
+        const id = indexGameId(pageUrl)
+        this.repo.games.put({
+          id,
+          title: item.title,
+          art: makeArt(id, { width: 600, height: 900, label: item.title }),
+          hero: makeArt(`${id}-hero`, { width: 2100, height: 900 }),
+          version: '—',
+          sizeBytes: item.sizeBytes,
+          description: indexDescription(item.title),
+          source: pageUrl,
+          shape: 'archive',
+          origin: 'index',
+          indexFiles,
+          vetted: false,
+          addedAt: now
+        })
+        continue
+      }
+
+      this.repo.games.put({
+        ...existing,
+        title: item.title,
+        sizeBytes: item.sizeBytes,
+        description: existing.description || indexDescription(item.title),
+        origin: existing.origin ?? 'index',
+        indexFiles,
+        addedAt: existing.addedAt || now
+      })
+    }
+
+    for (const game of this.repo.games.all()) {
+      if (game.origin !== 'index') continue
+      let indexFiles = game.indexFiles ?? []
+      for (const [file, listed] of listedByFile) {
+        const hasFile = indexFiles.includes(file)
+        const hasUrl = typeof game.source === 'string' && listed.has(game.source)
+        if (hasUrl && !hasFile) indexFiles = [...indexFiles, file]
+        if (!hasUrl && hasFile) indexFiles = indexFiles.filter((name) => name !== file)
+      }
+      indexFiles = [...new Set(indexFiles)].sort()
+
+      const inLibrary = this.entryFor('game', game.id) !== undefined
+      const keep = indexFiles.length > 0 || inLibrary || game.steamAppId !== undefined
+      if (!keep) {
+        this.repo.games.delete(game.id)
+        continue
+      }
+      this.repo.games.put({ ...game, indexFiles })
+    }
   }
 }

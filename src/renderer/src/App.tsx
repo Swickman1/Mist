@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { AddFlow } from './components/AddFlow'
+import { ConfirmModal } from './components/ConfirmModal'
 import { DownloadBar } from './components/DownloadBar'
 import { Fog } from './components/Fog'
 import { PlayerModal } from './components/PlayerModal'
@@ -52,6 +53,7 @@ export function App() {
         </div>
         <DownloadBar />
         <AddFlow />
+        <ConfirmModal />
         <PlayerModal />
         <Toasts />
       </div>

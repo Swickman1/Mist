@@ -1,10 +1,13 @@
 // Download host allowlist + the one HTTP helper downloads use. Main-process fetch
 // bypasses the renderer's session guard, so checkHost() is the only thing that
 // stops an arbitrary URL: every request and every redirect hop goes through it.
+import { hostAllowed } from '../shared/hosts'
+export { hostAllowed } from '../shared/hosts'
 
 /** Offered by Settings → "Add suggested hosts": freely downloadable, official sources. */
 export const SUGGESTED_DOWNLOAD_HOSTS = [
   'github.com',
+  'api.github.com',
   'objects.githubusercontent.com',
   'release-assets.githubusercontent.com',
   'archive.org'
@@ -42,12 +45,6 @@ export function normaliseHosts(lines: string[]): { ok: true; hosts: string[] } |
   return { ok: true, hosts }
 }
 
-/** Exact match or a subdomain on a label boundary: files.example.com matches example.com, evil-example.com does not. */
-export function hostAllowed(hostname: string, hosts: readonly string[]): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, '')
-  return hosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))
-}
-
 /** Throws HostNotAllowedError (naming the host) unless `url` is http(s) on an allowed host. Returns the parsed URL. */
 export function checkHost(url: string, hosts: readonly string[]): URL {
   let parsed: URL
@@ -69,6 +66,8 @@ export interface HttpContext {
 
 export interface HttpRequest {
   method?: 'GET' | 'HEAD'
+  /** Extra request headers, e.g. Accept for JSON APIs. */
+  headers?: Record<string, string>
   /** Byte offset for a Range request. */
   rangeFrom?: number
   /** A closed range, e.g. 0-0 to probe a size. */
@@ -85,7 +84,7 @@ export async function httpFetch(url: string, request: HttpRequest, context: Http
   let current = url
   for (let hop = 0; hop <= NET_CONFIG.maxRedirects; hop++) {
     checkHost(current, context.hosts())
-    const headers: Record<string, string> = { 'User-Agent': context.userAgent }
+    const headers: Record<string, string> = { 'User-Agent': context.userAgent, ...request.headers }
     if (request.referer) headers['Referer'] = request.referer
     if (request.rangeFrom !== undefined) headers['Range'] = `bytes=${request.rangeFrom}-${request.rangeTo ?? ''}`
     const response = await fetch(current, {
