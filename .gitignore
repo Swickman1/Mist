@@ -9,3 +9,4 @@ vendor/*
 vendor/mpv/*
 !vendor/mpv/LICENSE
 !vendor/mpv/SOURCE.md
+opencode.json
