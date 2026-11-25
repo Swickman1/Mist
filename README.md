@@ -27,7 +27,7 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 | `src/main/service.ts` | `MistService implements MistCalls` — the only thing the renderer talks to |
 | `src/main/index.ts`, `chrome.ts` | Window with native Windows caption buttons (`titleBarOverlay`, themed), IPC dispatch, network guard |
 | `src/preload/index.ts` | `window.mist` bridge built from `MIST_METHODS` |
-| `index/games.json` | Bundled catalog rows (`title`, `pageUrl`, `sizeBytes`), imported at startup. A GitHub `releases/latest` page resolves to its best Windows `.zip`/`.7z` (win64, then win32). **An entry's payload must contain the game's `.exe`** (top level or one folder down): data-only releases such as Freedoom install but cannot PLAY |
+| `index/games.json` | Bundled catalog rows (`title`, `pageUrl`, `sizeBytes`), imported at startup. A GitHub `releases/latest` page resolves to its best Windows `.zip`/`.7z` (win64, then win32). **An entry's payload must contain the game's `.exe`** (top level or one folder down): data-only releases such as Freedoom install but cannot PLAY. The release must hold exactly one Windows build: rolling tags that pile up builds (Veloren `nightly`: 200 windows zips) would download all of them, and repos without release assets (OpenTTD) fail with "no parts found" |
 | `src/renderer/src` | React UI: `store.tsx` (snapshot + UI state), `selectors.ts` (derived rules), `config.ts` (tuning knobs), `components/`, `pages/` |
 
 ## Seams (wired to the UI, intentionally unimplemented)
