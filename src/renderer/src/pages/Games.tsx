@@ -92,7 +92,8 @@ export function Games() {
       .filter((g) => filter === 'all' || (filter === 'owned') === owned(g))
       .sort(SORTS.find((s) => s.key === sort)!.compare)
     const library = sorted.filter((game) => owned(game))
-    const index = sorted.filter((game) => !owned(game) && game.origin === 'index')
+    // Index rows in their file's order (most popular first); rows no file ranks keep the chosen sort, after them.
+    const index = sorted.filter((game) => !owned(game) && game.origin === 'index').sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
     const rest = sorted.filter((game) => !owned(game) && game.origin !== 'index')
     return [...library, ...index, ...rest]
   }, [snapshot, filter, sort, query])

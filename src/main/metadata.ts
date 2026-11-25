@@ -5,8 +5,15 @@ import { artUrl } from '../shared/media'
 import type { Episode, Show, TmdbHit, TmdbKind } from '../shared/types'
 import { makeArt } from './art'
 import type { Repository } from './repository'
-import { TMDB_CONFIG, tmdbImageUrl, type TmdbClient, type TmdbMovieResult, type TmdbTvResult } from './tmdb'
+import { TMDB_CONFIG, tmdbImageUrl, type TmdbClient, type TmdbMovieResult, type TmdbTvResult, type TmdbVideos } from './tmdb'
 import type { ArtCache } from './artCache'
+
+/** The YouTube key of the best trailer: official before unofficial, Trailer before Teaser. */
+function trailerKeyOf(videos: TmdbVideos | undefined): string | undefined {
+  const youtube = (videos?.results ?? []).filter((video) => video.site === 'YouTube' && (video.type === 'Trailer' || video.type === 'Teaser'))
+  const score = (video: TmdbVideos['results'][number]) => (video.official ? 0 : 2) + (video.type === 'Trailer' ? 0 : 1)
+  return youtube.sort((a, b) => score(a) - score(b))[0]?.key
+}
 
 export const METADATA_CONFIG = {
   sizes: { poster: 'w500', hero: 'w1280', still: 'w300', searchPoster: 'w185' },
@@ -90,6 +97,7 @@ export async function importTitle(
   let base: Pick<Show, 'year' | 'rating' | 'overview'>
   let posterPath: string | null | undefined
   let backdropPath: string | null | undefined
+  let videos: TmdbVideos | undefined
   const drafts: EpisodeDraft[] = []
 
   if (kind === 'tv') {
@@ -99,6 +107,7 @@ export async function importTitle(
     base = { year: yearOf(details.first_air_date), rating: rating(details.vote_average), overview: details.overview }
     posterPath = details.poster_path
     backdropPath = details.backdrop_path
+    videos = details.videos
     const defaultMinutes = details.episode_run_time[0] ?? METADATA_CONFIG.fallbackEpisodeMinutes
     const seasons = details.seasons.filter((s) => !(METADATA_CONFIG.skipSpecials && s.season_number === 0) && s.episode_count > 0)
     for (const season of seasons) {
@@ -122,6 +131,7 @@ export async function importTitle(
     base = { year: yearOf(details.release_date), rating: rating(details.vote_average), overview: details.overview }
     posterPath = details.poster_path
     backdropPath = details.backdrop_path
+    videos = details.videos
     // A movie is a one-episode show: synthetic season 1 / episode 1.
     drafts.push({
       season: 1,
@@ -144,7 +154,8 @@ export async function importTitle(
     hero: backdropPath ? ref('hero', sizes.hero, backdropPath) : makeArt(`${showId}-hero`, { width: 2100, height: 900 }),
     seasons: [...new Set(drafts.map((d) => d.season))].sort((a, b) => a - b),
     tmdbId,
-    tmdbKind: kind
+    tmdbKind: kind,
+    trailerKey: trailerKeyOf(videos)
   }
 
   let created = 0

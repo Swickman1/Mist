@@ -52,6 +52,8 @@ export interface Game {
   origin?: 'index'
   /** Which bundled index files currently list this row. */
   indexFiles?: string[]
+  /** 0-based position in the bundled file that lists it (best position across files); unset when no file lists it. */
+  rank?: number
   vetted: boolean
   addedAt: number
 }
@@ -108,6 +110,8 @@ export interface Show {
   tmdbId?: number
   tmdbKind?: TmdbKind
   overview?: string
+  /** YouTube key of the show's TMDB trailer; plays in the iframe player when an episode has no file. */
+  trailerKey?: string
 }
 
 export interface Episode {
@@ -308,6 +312,8 @@ export interface MistCalls {
   /** The built-in suggestions for the allowlist. */
   suggestedDownloadHosts(): Promise<string[]>
   setLaunchAtLogin(enabled: boolean): void
+  /** Opens an embed URL in the system browser (window.open is denied inside Mist). Only EMBED_HOSTS URLs. */
+  openExternal(url: string): Promise<ActionResult>
 }
 
 export type MistMethod = keyof MistCalls
@@ -337,6 +343,7 @@ export const MIST_METHODS = [
   'clearCache',
   'pickFolder',
   'setLaunchAtLogin',
+  'openExternal',
   'playerOpen',
   'playerBounds',
   'playerClose',
@@ -360,7 +367,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'tmdbDiscover', 'tmdbGenres', 'steamSearch', 'suggestedDownloadHosts']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'tmdbDiscover', 'tmdbGenres', 'steamSearch', 'suggestedDownloadHosts', 'openExternal']
 
 export const IPC = {
   call: 'mist:call',

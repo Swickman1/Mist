@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "icons": "node scripts/make-icons.mjs",
     "dist": "node scripts/fetch-mpv.mjs && npm run icons && electron-vite build && electron-builder --win nsis",
-    "fetch-mpv": "node scripts/fetch-mpv.mjs"
+    "fetch-mpv": "node scripts/fetch-mpv.mjs",
+    "index": "node scripts/build-index.mjs"
   },
   "dependencies": {
     "better-sqlite3": "12.11.1",

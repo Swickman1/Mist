@@ -1,5 +1,7 @@
 // MistService: every renderer call lands here. Owns the repository and job runner.
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
+import { EMBED_HOSTS } from '../shared/embed'
+import { hostAllowed } from '../shared/hosts'
 import type {
   ActionResult,
   LibraryEntry,
@@ -416,6 +418,13 @@ export class MistService implements MistCalls {
     }
   }
 
+  async openExternal(url: string): Promise<ActionResult> {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' || !hostAllowed(parsed.hostname, EMBED_HOSTS)) return { ok: false, message: `Not an embed URL: ${url}` }
+    await shell.openExternal(parsed.href)
+    return { ok: true, message: 'Opened in your browser' }
+  }
+
   async pickFolder(): Promise<string | null> {
     const win = this.window()
     const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'] }
@@ -432,14 +441,16 @@ export class MistService implements MistCalls {
     const games = this.repo.games.all()
     const bySource = new Map(games.map((game) => [game.source, game] as const).filter((row): row is [string, (typeof games)[number]] => row[0] !== undefined))
     const listedByFile = new Map(files.map((file) => [file.file, new Set(file.items.map((item) => item.pageUrl))] as const))
-    const merged = new Map<string, { title: string; sizeBytes: number; files: Set<string> }>()
+    const merged = new Map<string, { title: string; sizeBytes: number; rank: number; files: Set<string> }>()
 
     for (const file of files) {
-      for (const item of file.items) {
+      file.items.forEach((item, rank) => {
         const current = merged.get(item.pageUrl)
-        if (current) current.files.add(file.file)
-        else merged.set(item.pageUrl, { title: item.title, sizeBytes: item.sizeBytes, files: new Set([file.file]) })
-      }
+        if (current) {
+          current.files.add(file.file)
+          current.rank = Math.min(current.rank, rank)
+        } else merged.set(item.pageUrl, { title: item.title, sizeBytes: item.sizeBytes, rank, files: new Set([file.file]) })
+      })
     }
 
     for (const [pageUrl, item] of merged) {
@@ -459,6 +470,7 @@ export class MistService implements MistCalls {
           shape: 'archive',
           origin: 'index',
           indexFiles,
+          rank: item.rank,
           vetted: false,
           addedAt: now
         })
@@ -472,6 +484,7 @@ export class MistService implements MistCalls {
         description: existing.description || indexDescription(item.title),
         origin: existing.origin ?? 'index',
         indexFiles,
+        rank: item.rank,
         addedAt: existing.addedAt || now
       })
     }
@@ -493,7 +506,7 @@ export class MistService implements MistCalls {
         this.repo.games.delete(game.id)
         continue
       }
-      this.repo.games.put({ ...game, indexFiles })
+      this.repo.games.put({ ...game, indexFiles, rank: indexFiles.length > 0 ? game.rank : undefined })
     }
   }
 }

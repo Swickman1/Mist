@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { IPC, MIST_METHODS, READ_ONLY_METHODS, type MistMethod, type Theme } from '../shared/types'
+import { EMBED_HOSTS } from '../shared/embed'
 import { MEDIA_SCHEME } from '../shared/media'
 import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome'
 import { installGame, reconcileInstalled } from './install'
@@ -30,17 +31,46 @@ function allowedHttpsHosts(downloadHosts: readonly string[]): string[] {
   return [...METADATA_HOSTS, ...downloadHosts]
 }
 
+/** Resource types the embedded player's own page may load once it is framed. */
+const EMBED_RESOURCE_TYPES = ['xhr', 'script', 'stylesheet', 'image', 'media', 'font']
+
+/** The iframe player: frames of an EMBED_HOSTS page, and that page's own subresources (by referrer). */
+function embedAllowed(details: Electron.OnBeforeRequestListenerDetails, url: URL): boolean {
+  if (url.protocol !== 'https:') return false
+  if (details.resourceType === 'subFrame') return hostAllowed(url.hostname, EMBED_HOSTS)
+  if (!details.referrer || !EMBED_RESOURCE_TYPES.includes(details.resourceType)) return false
+  return hostAllowed(new URL(details.referrer).hostname, EMBED_HOSTS)
+}
+
 /** Everything outside the local protocols, the dev server and the allowlist is cancelled and logged. */
 function blockNetwork(downloadHosts: () => readonly string[]): void {
   const devOrigin = devServerUrl ? new URL(devServerUrl) : undefined
+  const loggedEmbedHosts = new Set<string>()
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url)
     const local = LOCAL_PROTOCOLS.includes(url.protocol)
     const devServer = devOrigin !== undefined && url.host === devOrigin.host && ['http:', 'ws:'].includes(url.protocol)
     const metadata = url.protocol === 'https:' && hostAllowed(url.hostname, allowedHttpsHosts(downloadHosts()))
-    const allowed = local || devServer || metadata
+    const embed = !local && !devServer && !metadata && embedAllowed(details, url)
+    if (embed && !loggedEmbedHosts.has(url.hostname)) {
+      loggedEmbedHosts.add(url.hostname)
+      console.log(`[mist] frame host allowed: ${url.hostname}`)
+    }
+    const allowed = local || devServer || metadata || embed
     if (!allowed) console.warn(`[mist] blocked network request: ${details.url}`)
     callback({ cancel: !allowed })
+  })
+}
+
+/**
+ * Mist's page is file://, so the embed frame would go out with no Referer and the
+ * embedder refuses to play (YouTube: Error 153). Native apps identify themselves
+ * by app id instead, as embedders ask apps to.
+ */
+function identifyEmbedFrames(): void {
+  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const frame = details.resourceType === 'subFrame' && hostAllowed(new URL(details.url).hostname, EMBED_HOSTS)
+    callback({ requestHeaders: frame ? { ...details.requestHeaders, Referer: `https://${APP_ID}/` } : details.requestHeaders })
   })
 }
 
@@ -75,6 +105,8 @@ function createWindow(theme: Theme): BrowserWindow {
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
 app.setAppUserModelId(APP_ID)
+// Embedded players treat an Electron user agent as a bot; Mist presents as the Chrome it is built on.
+app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|mist)\/\S+/gi, '')
 registerMediaScheme()
 
 app.on('second-instance', () => {
@@ -93,6 +125,7 @@ app.whenReady().then(async () => {
   const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
   // The session guard reads the download hosts live, so Settings edits apply at once.
   blockNetwork(() => repo.settings.downloadHosts)
+  identifyEmbedFrames()
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
   /** Allowlist (read live from settings) + User-Agent for every URL source. */
   const http = { hosts: () => repo.settings.downloadHosts, userAgent: `Mist/${app.getVersion()}` }

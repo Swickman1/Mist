@@ -27,7 +27,7 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 | `src/main/service.ts` | `MistService implements MistCalls` — the only thing the renderer talks to |
 | `src/main/index.ts`, `chrome.ts` | Window with native Windows caption buttons (`titleBarOverlay`, themed), IPC dispatch, network guard |
 | `src/preload/index.ts` | `window.mist` bridge built from `MIST_METHODS` |
-| `index/games.json` | Bundled catalog rows (`title`, `pageUrl`, `sizeBytes`), imported at startup. A GitHub `releases/latest` page resolves to its best Windows `.zip`/`.7z` (win64, then win32). **An entry's payload must contain the game's `.exe`** (top level or one folder down): data-only releases such as Freedoom install but cannot PLAY. The release must hold exactly one Windows build: rolling tags that pile up builds (Veloren `nightly`: 200 windows zips) would download all of them, and repos without release assets (OpenTTD) fail with "no parts found" |
+| `index/games.json` | Bundled catalog rows (`title`, `pageUrl`, `sizeBytes`), imported at startup. A GitHub `releases/latest` page resolves to its best Windows `.zip`/`.7z` (win64, then win32). **An entry's payload must contain the game's `.exe`** (top level or one folder down): data-only releases such as Freedoom install but cannot PLAY. A row's position in its file is its `rank` (0 = most popular); the Games tab lists library rows first, then index rows by rank, then everything else. The release must hold exactly one Windows build: rolling tags that pile up builds (Veloren `nightly`: 200 windows zips) would download all of them, and repos without release assets (OpenTTD) fail with "no parts found" |
 | `src/renderer/src` | React UI: `store.tsx` (snapshot + UI state), `selectors.ts` (derived rules), `config.ts` (tuning knobs), `components/`, `pages/` |
 
 ## Seams (wired to the UI, intentionally unimplemented)
@@ -36,6 +36,12 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 - `src/player/index.ts` — `Player`: black 16:9 box in a loading state. Opened by Continue Watching, episode rows, PLAY/RESUME.
 - `src/verify/index.ts` — `sha256File` stub. Called by the *Hash verified* chip on the game page.
 - Game PLAY and save *Back up* return "not implemented" toasts.
+
+## Building an index
+
+`npm run index` runs every adapter in `scripts/index-sources/*.mjs` (each exports `{ name, url, fixture?, parse(html) -> { title, pageUrl, sizeBytes? }[] }`) and writes `index/catalog-extra.json`; `games.json` is never touched. Pages are fetched one at a time, 1 s apart, as `Mist/<version>`. A failed page is logged and skipped; rows are deduped by `pageUrl`, kept in page order (it is their rank), capped at 2000, stamped with `generatedAt`, and written via a `.tmp` + rename. If an adapter yields no rows the exit code is 1, and a run with no rows at all leaves the previous file in place. `npm run index -- --fixture` reads each adapter's saved HTML instead (no network); `--out <path>` writes elsewhere.
+
+The shipped adapter reads `github.com/topics/open-source-game` (most-starred first). GitHub rate-limits that page (HTTP 429) after a few requests; rerun later. `catalog-extra.json` is not in `BUNDLED_FILES` yet, so Mist does not import it until that line lists it.
 
 ## No network
 
@@ -52,6 +58,14 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 - **Build gotcha:** without Windows Developer Mode, electron-builder fails extracting `winCodeSign` (macOS symlinks). Fix: extract the cached `.7z` with `7za x -y` into `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0` and rerun.
 
 ## Playback
+
+Three backends, tried in order:
+
+1. **Local file → mpv** (below), with the built-in `<video>` player as mpv's fallback.
+2. **No file → iframe.** When an episode has no file and its show has a TMDB trailer, the trailer plays in a sandboxed 16:9 iframe (`src/player/IframePlayer.tsx`). It needs no file and no download host. The frameable host is `EMBED_HOSTS` in `src/shared/embed.ts` (YouTube's no-cookie player); `src/renderer/index.html`'s CSP must list the same host, because a CSP is fixed when the page loads. The session guard allows frames of that host and the subresources they request (logged once per host as `[mist] frame host allowed: <host>`). Frame requests carry `https://com.mist.launcher/` as Referer (a `file://` page sends none, and YouTube then refuses with Error 153), and the app's user agent omits the `Electron/` token. Whether a video plays is up to the third party: on 2026-11-25 YouTube answered this PC with "Sign in to confirm you're not a bot". With no load event and no message after 12 s the player shows *Could not load the player* and **Open in browser** (`openExternal`, embed hosts only). Position is read from `{type:'time',currentTime}` messages from that host, written at most every 10 s and on close.
+3. **Neither → the missing-file state.**
+
+Trailer keys come from TMDB (`append_to_response=videos`) when a show is imported or refreshed.
 
 The player uses **mpv** for every file it can open: HEVC, AV1, AC-3, DTS and so on, with hardware decoding (`hwdec=auto-safe`) and software fallback. mpv renders in a borderless window kept over the player's rectangle and is driven over its JSON IPC pipe. Keys go from Mist to mpv as `keypress`, so Mist keeps focus: Space/k pause, ←/j and →/l seek 10s, f fullscreen, Esc leaves fullscreen and then closes. If mpv is missing or cannot open a file, the built-in `<video>` player is used instead, with mpv's own error text as the reason.
 

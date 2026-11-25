@@ -1,7 +1,9 @@
-// Player: mpv first (any codec, hardware decode), the <video> element as the
-// fallback when mpv is not installed or cannot open the file.
+// Player backends, in order: a local file plays in mpv (any codec, hardware decode)
+// with the <video> element as its fallback; with no file, an embed URL plays in the
+// iframe backend; with neither, the <video> backend shows the missing-file state.
 // These props are the contract both backends keep.
 import { useRef, useState } from 'react'
+import { IframePlayer } from './IframePlayer'
 import { MpvPlayer } from './MpvPlayer'
 import { VideoPlayer } from './VideoPlayer'
 
@@ -10,6 +12,10 @@ export interface PlayerProps {
   subtitle?: string
   /** Absolute path of the local video file; undefined when it was not found on disk. */
   filePath?: string
+  /** Embed page (EMBED_HOSTS only) played in an iframe when there is no filePath. */
+  embedUrl?: string
+  /** One line under the iframe player saying what the embed is. */
+  embedLabel?: string
   /** Still shown until playback starts. */
   poster: string
   /** Where playback starts. */
@@ -30,6 +36,8 @@ export function Player(props: PlayerProps) {
     latest.current = positionSec
     props.onPosition(positionSec)
   }
+
+  if (!props.filePath && props.embedUrl) return <IframePlayer {...props} embedUrl={props.embedUrl} />
 
   if (!props.filePath || fallback !== null) {
     return (

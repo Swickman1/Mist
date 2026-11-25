@@ -56,7 +56,13 @@ export interface TmdbSearch<T> {
   results: T[]
 }
 
+/** Videos appended to a details call (append_to_response=videos). */
+export interface TmdbVideos {
+  results: { site: string; key: string; type: string; official?: boolean }[]
+}
+
 export interface TmdbTvDetails extends TmdbTvResult {
+  videos?: TmdbVideos
   backdrop_path?: string | null
   episode_run_time: number[]
   seasons: { season_number: number; episode_count: number; name: string }[]
@@ -75,6 +81,7 @@ export interface TmdbSeasonDetails {
 }
 
 export interface TmdbMovieDetails extends TmdbMovieResult {
+  videos?: TmdbVideos
   backdrop_path?: string | null
   runtime?: number | null
 }
@@ -144,7 +151,7 @@ export class TmdbClient {
   }
 
   tvDetails(tmdbId: number): Promise<TmdbTvDetails> {
-    return this.get(`/tv/${tmdbId}`)
+    return this.get(`/tv/${tmdbId}`, { append_to_response: 'videos' })
   }
 
   seasonDetails(tmdbId: number, season: number): Promise<TmdbSeasonDetails> {
@@ -152,7 +159,7 @@ export class TmdbClient {
   }
 
   movieDetails(tmdbId: number): Promise<TmdbMovieDetails> {
-    return this.get(`/movie/${tmdbId}`)
+    return this.get(`/movie/${tmdbId}`, { append_to_response: 'videos' })
   }
 
   /** /trending/{kind}/week */

@@ -2,9 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- frame-src / connect-src list the iframe player's host (EMBED_HOSTS in src/shared/embed.ts).
+         A CSP is fixed when the page loads, so this host cannot be changed live from settings. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: mist-media: https://image.tmdb.org https://shared.akamai.steamstatic.com; font-src 'self' data:; connect-src 'self' ws://localhost:* https://api.themoviedb.org https://image.tmdb.org https://store.steampowered.com https://shared.akamai.steamstatic.com; media-src 'self' mist-media:; object-src 'none'; frame-src 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: mist-media: https://image.tmdb.org https://shared.akamai.steamstatic.com; font-src 'self' data:; connect-src 'self' ws://localhost:* https://api.themoviedb.org https://image.tmdb.org https://store.steampowered.com https://shared.akamai.steamstatic.com https://www.youtube-nocookie.com; media-src 'self' mist-media:; object-src 'none'; frame-src https://www.youtube-nocookie.com"
     />
     <title>Mist</title>
   </head>
