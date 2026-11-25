@@ -20,10 +20,25 @@ export interface PlayerProps {
   onClose?(): void
 }
 
+export const MPV_MISSING_BANNER = 'mpv is not installed — HEVC and AC-3 files will not play. winget install shinchiro.mpv'
+
 export function Player(props: PlayerProps) {
-  const [mpvUnavailable, setMpvUnavailable] = useState<string | null>(null)
-  if (!props.filePath || mpvUnavailable !== null) {
-    return <VideoPlayer {...props} notice={mpvUnavailable ? `mpv unavailable (${mpvUnavailable}), using built-in player` : undefined} />
+  const [fallback, setFallback] = useState<{ reason: string; showMissingBanner: boolean } | null>(null)
+  if (!props.filePath || fallback !== null) {
+    return (
+      <VideoPlayer
+        {...props}
+        notice={fallback ? `mpv unavailable (${fallback.reason}), using built-in player` : undefined}
+        banner={fallback?.showMissingBanner ? MPV_MISSING_BANNER : undefined}
+        onDismissBanner={() => void window.mist.updateSettings({ mpvBannerDismissed: true })}
+      />
+    )
   }
-  return <MpvPlayer {...props} filePath={props.filePath} onUnavailable={setMpvUnavailable} />
+  return (
+    <MpvPlayer
+      {...props}
+      filePath={props.filePath}
+      onUnavailable={(reason, showMissingBanner) => setFallback({ reason, showMissingBanner: showMissingBanner ?? false })}
+    />
+  )
 }

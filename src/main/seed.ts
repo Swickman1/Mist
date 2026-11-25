@@ -214,6 +214,7 @@ export function defaultSettings(home: string): Settings {
     ],
     cacheBytes: Math.round(1.7 * GB),
     theme: 'mist',
-    hardwareDecode: true
+    hardwareDecode: true,
+    mpvBannerDismissed: false
   }
 }

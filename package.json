@@ -50,6 +50,15 @@
       {
         "from": "build/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "vendor/mpv",
+        "to": "mpv",
+        "filter": [
+          "mpv.exe",
+          "*.dll",
+          "LICENSE"
+        ]
       }
     ],
     "npmRebuild": false,

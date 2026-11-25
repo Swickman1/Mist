@@ -18,7 +18,17 @@ function formatTime(sec: number): string {
 
 const fill: React.CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%' }
 
-export function VideoPlayer({ title, subtitle, filePath, poster, startAtSec, onPosition, notice }: PlayerProps & { notice?: string }) {
+export function VideoPlayer({
+  title,
+  subtitle,
+  filePath,
+  poster,
+  startAtSec,
+  onPosition,
+  notice,
+  banner,
+  onDismissBanner
+}: PlayerProps & { notice?: string; banner?: string; onDismissBanner?(): void }) {
   const video = useRef<HTMLVideoElement>(null)
   const screen = useRef<HTMLDivElement>(null)
   const lastWrite = useRef(startAtSec)
@@ -28,6 +38,7 @@ export function VideoPlayer({ title, subtitle, filePath, poster, startAtSec, onP
   const [started, setStarted] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [bannerVisible, setBannerVisible] = useState(true)
 
   const write = useCallback(() => {
     const el = video.current
@@ -70,6 +81,33 @@ export function VideoPlayer({ title, subtitle, filePath, poster, startAtSec, onP
 
   return (
     <div className="player" role="region" aria-label={`Player: ${title}`}>
+      {banner && bannerVisible && (
+        <div
+          role="status"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            padding: '8px 12px',
+            border: '1px solid var(--border-strong)',
+            borderLeft: '2px solid var(--amber)',
+            borderRadius: 'var(--radius)',
+            background: 'var(--surface-2)',
+            fontSize: 12
+          }}
+        >
+          <span style={{ flex: 1, userSelect: 'text' }}>{banner}</span>
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={() => {
+              setBannerVisible(false)
+              onDismissBanner?.()
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="player__screen" ref={screen} tabIndex={0} onKeyDown={onKeyDown}>
         {filePath && !error && (
           <video

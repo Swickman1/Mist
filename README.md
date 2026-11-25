@@ -52,4 +52,20 @@ Settings → Library data has **Clear library** (shows the empty states) and **R
 
 ## Playback
 
-The player uses **mpv** when it is installed (`winget install shinchiro.mpv`, or put `mpv.exe` in `vendor/mpv/`, or on PATH). mpv renders inside a borderless child window that tracks the player's rectangle and is controlled over its JSON IPC pipe. It plays any codec (HEVC, AV1, AC-3/DTS…) with `hwdec=auto-safe`; when no hardware decoder fits, mpv drops to software. Settings → Playback → **Hardware decoding** turns hardware decoding off. When mpv is missing or cannot open a file, the built-in `<video>` player (H.264/VP9/AV1 + AAC/Opus) is used instead, behind the same `Player` props.
+The player uses **mpv** for every file it can open: HEVC, AV1, AC-3, DTS and so on, with hardware decoding (`hwdec=auto-safe`) and software fallback. mpv renders in a borderless window kept over the player's rectangle and is driven over its JSON IPC pipe. Keys go from Mist to mpv as `keypress`, so Mist keeps focus: Space/k pause, ←/j and →/l seek 10s, f fullscreen, Esc leaves fullscreen and then closes. If mpv is missing or cannot open a file, the built-in `<video>` player is used instead, with mpv's own error text as the reason.
+
+### Getting mpv
+
+- **Installed system-wide:** `winget install shinchiro.mpv` (installs to `C:\Program Files\MPV Player`). Mist finds it there, or on PATH.
+- **Bundled with the installer:** copy mpv into `vendor/mpv/` before `npm run dist`. It is gitignored because mpv is a GPLv2+ third-party binary, so it is not committed:
+  ```
+  vendor/mpv/mpv.exe
+  vendor/mpv/d3dcompiler_43.dll   (ships with the shinchiro build)
+  vendor/mpv/LICENSE              (mpv's Copyright + LICENSE.GPL from github.com/mpv-player/mpv)
+  ```
+  `extraResources` copies them to `resources/mpv/`, which Mist checks first.
+- **A specific build:** set `MIST_MPV_PATH` to its `mpv.exe`. When set, it is the only path Mist checks.
+
+Without mpv the player shows a one-time banner ("mpv is not installed …") that you can dismiss; the choice is saved in settings.
+
+mpv PIDs are tracked in `%APPDATA%\Mist\mpv-pids.json`; any left behind by a crash are killed on the next launch.

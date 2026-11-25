@@ -130,6 +130,8 @@ export interface Settings {
   theme: Theme
   /** mpv hardware decoding (auto-safe); software is used when it is off or fails. */
   hardwareDecode: boolean
+  /** The player's 'mpv is not installed' banner was dismissed. */
+  mpvBannerDismissed: boolean
 }
 
 /** Launch-at-login is OS state; only a packaged install can register itself. */
@@ -166,7 +168,16 @@ export interface PlayerOpenRequest {
 }
 
 /** mpv when it is available and opened the file; otherwise the renderer falls back to <video>. */
-export type PlayerOpenResult = { backend: 'mpv' } | { backend: 'video'; reason: string }
+export type PlayerOpenResult =
+  | { backend: 'mpv' }
+  | {
+      backend: 'video'
+      reason: string
+      /** No mpv.exe was found at all. */
+      mpvMissing?: boolean
+      /** mpvMissing and the banner has not been dismissed. */
+      showMissingBanner?: boolean
+    }
 
 export type PlayerEvent =
   | { type: 'time'; position: number; duration: number; paused: boolean }

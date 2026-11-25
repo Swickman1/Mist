@@ -185,8 +185,10 @@ export class MistService implements MistCalls {
     app.setLoginItemSettings({ openAtLogin: enabled })
   }
 
-  playerOpen(request: PlayerOpenRequest): Promise<PlayerOpenResult> {
-    return this.mpv.open(request)
+  async playerOpen(request: PlayerOpenRequest): Promise<PlayerOpenResult> {
+    const result = await this.mpv.open(request)
+    if (result.backend === 'video' && result.mpvMissing) return { ...result, showMissingBanner: !this.repo.settings.mpvBannerDismissed }
+    return result
   }
 
   playerBounds(bounds: PlayerBounds): void {

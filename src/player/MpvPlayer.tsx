@@ -35,7 +35,7 @@ export function MpvPlayer({
   onPosition,
   onClose,
   onUnavailable
-}: PlayerProps & { filePath: string; onUnavailable(reason: string): void }) {
+}: PlayerProps & { filePath: string; onUnavailable(reason: string, showMissingBanner?: boolean): void }) {
   const screen = useRef<HTMLDivElement>(null)
   const report = useRef(onPosition)
   report.current = onPosition
@@ -87,7 +87,7 @@ export function MpvPlayer({
 
     void api.playerOpen({ filePath, title, startAtSec, bounds: boundsOf(el) }).then((result) => {
       if (!alive) return
-      if (result.backend === 'video') onUnavailable(result.reason)
+      if (result.backend === 'video') onUnavailable(result.reason, result.showMissingBanner)
       else {
         playing = true
         setStatus('playing')

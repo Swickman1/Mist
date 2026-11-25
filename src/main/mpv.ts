@@ -11,14 +11,20 @@ import { app, BaseWindow, screen, type BrowserWindow } from 'electron'
 import type { PlayerBounds, PlayerEvent, PlayerOpenRequest, PlayerOpenResult } from '../shared/types'
 
 export const MPV_CONFIG = {
-  /** Checked in order; a bare name is looked up on PATH. */
-  candidates: () => [
-    join(process.resourcesPath, 'mpv', 'mpv.exe'),
-    join(app.getAppPath(), 'vendor', 'mpv', 'mpv.exe'),
-    'C:\\Program Files\\MPV Player\\mpv.exe',
-    'C:\\Program Files\\mpv\\mpv.exe',
-    'mpv.exe'
-  ],
+  /**
+   * Checked in order; a bare name is looked up on PATH. MIST_MPV_PATH, when set,
+   * is the only candidate (a specific mpv build, or a missing path to run without mpv).
+   */
+  candidates: () =>
+    process.env['MIST_MPV_PATH']
+      ? [process.env['MIST_MPV_PATH']]
+      : [
+          join(process.resourcesPath, 'mpv', 'mpv.exe'),
+          join(app.getAppPath(), 'vendor', 'mpv', 'mpv.exe'),
+          'C:\\Program Files\\MPV Player\\mpv.exe',
+          'C:\\Program Files\\mpv\\mpv.exe',
+          'mpv.exe'
+        ],
   pipeConnectMs: 5_000,
   loadTimeoutMs: 10_000,
   quitTimeoutMs: 1_500,
@@ -409,7 +415,7 @@ export class MpvHost {
     const win = this.host()
     const mpvPath = locateMpv()
     if (!win) return { backend: 'video', reason: 'no window' }
-    if (!mpvPath) return { backend: 'video', reason: 'mpv is not installed' }
+    if (!mpvPath) return { backend: 'video', reason: 'mpv is not installed', mpvMissing: true }
     this.bounds = request.bounds
 
     // Hardware first (when enabled); if mpv cannot load the file that way, once more in software.
