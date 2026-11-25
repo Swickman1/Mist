@@ -6,8 +6,9 @@ import { extname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { protocol } from 'electron'
 import type { Episode, LibraryEntry } from '../shared/types'
-import { MEDIA_SCHEME, mediaPath } from '../shared/media'
+import { MEDIA_SCHEME, mediaPath, parseTmdbArtUrl } from '../shared/media'
 import type { Repository } from './repository'
+import type { TmdbCache } from './tmdbCache'
 
 const VIDEO_TYPES: Record<string, string> = {
   '.mp4': 'video/mp4',
@@ -73,9 +74,23 @@ function parseRange(header: string | null, size: number): { start: number; end: 
   return start <= end ? { start, end } : undefined
 }
 
-/** Serves indexed episode files only; anything else is 403. */
-export function handleMediaRequests(repo: Repository): void {
+/** Cached TMDB artwork; a miss is fetched from image.tmdb.org once and stored. */
+async function serveTmdbArt(url: string, cache: TmdbCache): Promise<Response> {
+  const ref = parseTmdbArtUrl(url)
+  if (!ref) return new Response('Forbidden', { status: 403 })
+  try {
+    const { bytes, type, fromCache } = await cache.image(ref)
+    if (!fromCache) console.log(`[mist] tmdb image cache miss: ${ref.key}/${ref.asset}`)
+    return new Response(new Uint8Array(bytes), { status: 200, headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000, immutable' } })
+  } catch {
+    return new Response('Unavailable', { status: 502 })
+  }
+}
+
+/** Serves indexed episode files and cached TMDB artwork; anything else is 403. */
+export function handleMediaRequests(repo: Repository, cache: TmdbCache): void {
   protocol.handle(MEDIA_SCHEME, async (request) => {
+    if (new URL(request.url).hostname === 'tmdb') return serveTmdbArt(request.url, cache)
     const path = mediaPath(request.url)
     if (!repo.episodes.all().some((episode) => episode.filePath === path)) return new Response('Forbidden', { status: 403 })
     let size: number

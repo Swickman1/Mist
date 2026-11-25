@@ -7,8 +7,10 @@ import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
 import { MpvHost, MpvPidFile } from './mpv'
 import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media'
+import { migrateRemoteArt } from './metadata'
 import { Repository } from './repository'
 import { MistService } from './service'
+import { TmdbCache } from './tmdbCache'
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 let mainWindow: BrowserWindow | undefined
@@ -89,7 +91,16 @@ app.whenReady().then(() => {
     () => broadcast(IPC.snapshot, service.snapshot())
   )
   const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event), mpvPids)
-  const service: MistService = new MistService(repo, runner, app.getVersion(), () => mainWindow, mpv, () => broadcast(IPC.snapshot, service.snapshot()))
+  const tmdbCache = new TmdbCache(app.getPath('userData'))
+  const service: MistService = new MistService(
+    repo,
+    runner,
+    app.getVersion(),
+    () => mainWindow,
+    mpv,
+    () => broadcast(IPC.snapshot, service.snapshot()),
+    tmdbCache
+  )
 
   ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {
     if (!MIST_METHODS.includes(method)) throw new Error(`Unknown method ${method}`)
@@ -99,7 +110,8 @@ app.whenReady().then(() => {
   })
 
   reconcileInstalled(repo)
-  handleMediaRequests(repo)
+  migrateRemoteArt(repo)
+  handleMediaRequests(repo, tmdbCache)
   void indexAllShows(repo).then((changed) => changed && broadcast(IPC.snapshot, service.snapshot()))
   runner.start()
   mainWindow = createWindow(repo.settings.theme)

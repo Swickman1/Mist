@@ -21,7 +21,8 @@ import { launchGame } from './install'
 import { indexShow } from './media'
 import type { MpvHost } from './mpv'
 import { backupSaves } from './saves'
-import { importTitle, METADATA_CONFIG, remoteArt, toHit, type ArtUrl } from './metadata'
+import { artUrlsOf, cachedArt, importTitle, METADATA_CONFIG, toHit, type ArtUrl } from './metadata'
+import type { TmdbCache } from './tmdbCache'
 import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
@@ -31,7 +32,7 @@ const MIN_PLAYTIME_RUN_SEC = 10
 
 export class MistService implements MistCalls {
   /** Where imported TMDB artwork is referenced from. */
-  private readonly art: ArtUrl = remoteArt
+  private readonly art: ArtUrl = cachedArt
   private readonly tmdb = new TmdbClient(() => ({ key: this.repo.settings.tmdbKey, language: this.repo.settings.tmdbLanguage }))
 
   constructor(
@@ -41,7 +42,8 @@ export class MistService implements MistCalls {
     private readonly window: () => BrowserWindow | undefined,
     private readonly mpv: MpvHost,
     /** Library rows changed outside an IPC call (e.g. playtime after a game exits). */
-    private readonly onLibraryChanged: () => void
+    private readonly onLibraryChanged: () => void,
+    private readonly tmdbCache: TmdbCache
   ) {}
 
   snapshot(): Snapshot {
@@ -252,12 +254,14 @@ export class MistService implements MistCalls {
   async addShowFromTmdb(kind: TmdbKind, tmdbId: number, path?: string): Promise<ActionResult> {
     let imported
     try {
-      imported = await importTitle(this.tmdb, this.repo, kind, tmdbId, this.art)
+      imported = await importTitle(this.tmdb, this.repo, this.tmdbCache, kind, tmdbId, this.art)
     } catch (error) {
       return { ok: false, message: (error as Error).message }
     }
     const { show, created, updated } = imported
     await this.addShow(show.id, path)
+    // Warm the artwork cache in the background so the title works offline from here on.
+    void this.tmdbCache.prefetch(artUrlsOf(this.repo, show.id))
     const what =
       kind === 'movie'
         ? `movie, ${created ? '1 episode created' : '1 episode updated'}`

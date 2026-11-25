@@ -1,10 +1,12 @@
 // Maps TMDB titles onto Mist's Show / Episode rows. Used by add (create) and by
 // refresh (update): metadata fields are overwritten, but filePath, positionSec
 // and library rows are never touched.
+import { tmdbArtUrl } from '../shared/media'
 import type { Episode, Show, TmdbHit, TmdbKind } from '../shared/types'
 import { makeArt } from './art'
 import type { Repository } from './repository'
-import { tmdbImageUrl, type TmdbClient, type TmdbMovieResult, type TmdbTvResult } from './tmdb'
+import { TMDB_CONFIG, tmdbImageUrl, type TmdbClient, type TmdbMovieResult, type TmdbTvResult } from './tmdb'
+import type { TmdbCache } from './tmdbCache'
 
 export const METADATA_CONFIG = {
   sizes: { poster: 'w500', hero: 'w1280', still: 'w300', searchPoster: 'w185' },
@@ -18,10 +20,15 @@ export const METADATA_CONFIG = {
 
 export type ArtAsset = 'poster' | 'hero' | `still-s${number}e${number}`
 
-/** Where a TMDB image is referenced from: remote here; task 3 points this at the local cache. */
+/** Where a stored TMDB image is referenced from. */
 export type ArtUrl = (ref: { kind: TmdbKind; tmdbId: number; asset: ArtAsset; size: string; path: string }) => string
 
-export const remoteArt: ArtUrl = ({ size, path }) => tmdbImageUrl(size, path)
+export function cacheKey(kind: TmdbKind, tmdbId: number): string {
+  return `${kind}-${tmdbId}`
+}
+
+/** Stored artwork goes through mist-media://tmdb, served from userData/tmdb-cache (remote only on a miss). */
+export const cachedArt: ArtUrl = ({ kind, tmdbId, asset, size, path }) => tmdbArtUrl({ key: cacheKey(kind, tmdbId), asset, src: `${size}${path}` })
 
 export function showIdFor(kind: TmdbKind, tmdbId: number): string {
   return `s-tmdb-${kind}-${tmdbId}`
@@ -66,7 +73,14 @@ export interface ImportResult {
 }
 
 /** Fetches a title's details (and for tv every season) and upserts the show and its episodes. */
-export async function importTitle(tmdb: TmdbClient, repo: Repository, kind: TmdbKind, tmdbId: number, art: ArtUrl): Promise<ImportResult> {
+export async function importTitle(
+  tmdb: TmdbClient,
+  repo: Repository,
+  cache: TmdbCache,
+  kind: TmdbKind,
+  tmdbId: number,
+  art: ArtUrl
+): Promise<ImportResult> {
   const showId = showIdFor(kind, tmdbId)
   const { sizes } = METADATA_CONFIG
   let title: string
@@ -77,6 +91,7 @@ export async function importTitle(tmdb: TmdbClient, repo: Repository, kind: Tmdb
 
   if (kind === 'tv') {
     const details = await tmdb.tvDetails(tmdbId)
+    await cache.writeJson(cacheKey(kind, tmdbId), 'details', details)
     title = details.name
     base = { year: yearOf(details.first_air_date), rating: rating(details.vote_average), overview: details.overview }
     posterPath = details.poster_path
@@ -85,6 +100,7 @@ export async function importTitle(tmdb: TmdbClient, repo: Repository, kind: Tmdb
     const seasons = details.seasons.filter((s) => !(METADATA_CONFIG.skipSpecials && s.season_number === 0) && s.episode_count > 0)
     for (const season of seasons) {
       const detail = await tmdb.seasonDetails(tmdbId, season.season_number)
+      await cache.writeJson(cacheKey(kind, tmdbId), `season-${season.season_number}`, detail)
       for (const ep of detail.episodes) {
         drafts.push({
           season: ep.season_number,
@@ -98,6 +114,7 @@ export async function importTitle(tmdb: TmdbClient, repo: Repository, kind: Tmdb
     }
   } else {
     const details = await tmdb.movieDetails(tmdbId)
+    await cache.writeJson(cacheKey(kind, tmdbId), 'details', details)
     title = details.title
     base = { year: yearOf(details.release_date), rating: rating(details.vote_average), overview: details.overview }
     posterPath = details.poster_path
@@ -154,4 +171,41 @@ export async function importTitle(tmdb: TmdbClient, repo: Repository, kind: Tmdb
     }
   })
   return { show, created, updated }
+}
+
+/** Every stored artwork URL of a show (poster, hero, episode stills), for warming the cache. */
+export function artUrlsOf(repo: Repository, showId: string): string[] {
+  const show = repo.shows.get(showId)
+  if (!show) return []
+  return [show.poster, show.hero, ...repo.episodes.all().filter((e) => e.showId === showId).map((e) => e.still)]
+}
+
+/** Rows imported before the cache existed (remote image.tmdb.org URLs) switch to cached mist-media URLs. */
+export function migrateRemoteArt(repo: Repository): number {
+  const prefix = `${TMDB_CONFIG.imageBase}/`
+  const toCached = (url: string, kind: TmdbKind, tmdbId: number, asset: ArtAsset) => {
+    if (!url.startsWith(prefix)) return url
+    const [size, ...rest] = url.slice(prefix.length).split('/')
+    return cachedArt({ kind, tmdbId, asset, size, path: `/${rest.join('/')}` })
+  }
+  let changed = 0
+  repo.transaction(() => {
+    for (const show of repo.shows.all()) {
+      if (!show.tmdbKind || !show.tmdbId) continue
+      const { tmdbKind: kind, tmdbId } = show
+      const next = { ...show, poster: toCached(show.poster, kind, tmdbId, 'poster'), hero: toCached(show.hero, kind, tmdbId, 'hero') }
+      if (next.poster !== show.poster || next.hero !== show.hero) {
+        repo.shows.put(next)
+        changed++
+      }
+      for (const episode of repo.episodes.all().filter((e) => e.showId === show.id)) {
+        const still = toCached(episode.still, kind, tmdbId, `still-s${episode.season}e${episode.episode}`)
+        if (still !== episode.still) {
+          repo.episodes.put({ ...episode, still })
+          changed++
+        }
+      }
+    }
+  })
+  return changed
 }
