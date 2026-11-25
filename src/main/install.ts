@@ -1,6 +1,6 @@
 // Install: turn a verified staging folder into <libraryPath>/<safe title>,
 // detect the game's exe, and launch it. Also reconciles installed paths on disk.
-import { execFile, spawn } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { cp, mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative } from 'node:path'
@@ -153,12 +153,15 @@ export async function installGame(game: Game, stagingDir: string, libraryPath: s
   return { path: target, exeHint }
 }
 
-/** Launches the game's exe detached from Mist. Throws when it is not on disk. */
-export function launchGame(entry: LibraryEntry, game: Game): void {
+/** Launches the game's exe detached from Mist and returns it (for playtime). Throws when it is not on disk. */
+export function launchGame(entry: LibraryEntry, game: Game): ChildProcess {
   if (!entry.path || !game.exeHint) throw new Error(`${game.title} has no executable to launch`)
   const exe = join(entry.path, game.exeHint)
   if (!existsSync(exe)) throw new Error(`${exe} is missing`)
-  spawn(exe, [], { cwd: dirname(exe), detached: true, stdio: 'ignore', windowsHide: false }).unref()
+  const child = spawn(exe, [], { cwd: dirname(exe), detached: true, stdio: 'ignore', windowsHide: false })
+  // Detached and unref'd: Mist can quit while the game runs; 'exit' still fires while Mist is alive.
+  child.unref()
+  return child
 }
 
 /** Marks every ready/update entry whose folder is gone as missing. Returns whether anything changed. */

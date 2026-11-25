@@ -12,13 +12,18 @@ import { backupSaves } from './saves'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
 
+/** Shorter runs (crash on launch, a launcher that hands off and exits) do not count as play. */
+const MIN_PLAYTIME_RUN_SEC = 10
+
 export class MistService implements MistCalls {
   constructor(
     private readonly repo: Repository,
     private readonly runner: JobRunner,
     private readonly appVersion: string,
     private readonly window: () => BrowserWindow | undefined,
-    private readonly mpv: MpvHost
+    private readonly mpv: MpvHost,
+    /** Library rows changed outside an IPC call (e.g. playtime after a game exits). */
+    private readonly onLibraryChanged: () => void
   ) {}
 
   snapshot(): Snapshot {
@@ -81,14 +86,27 @@ export class MistService implements MistCalls {
       return { ok: true, message: `Playing ${this.repo.shows.get(entry.refId)!.title}` }
     }
     const game = this.repo.games.get(entry.refId)!
+    let child
     try {
-      launchGame(entry, game)
+      child = launchGame(entry, game)
     } catch (error) {
       if (entry.path && !existsSync(entry.path)) this.repo.library.put({ ...entry, state: 'missing' })
       return { ok: false, message: (error as Error).message }
     }
-    this.repo.library.put({ ...entry, lastPlayedAt: Date.now() })
+    const startedAt = Date.now()
+    child.once('error', () => undefined) // a failed spawn must not crash main; it simply records no playtime
+    child.once('exit', () => this.recordPlaytime(entryId, (Date.now() - startedAt) / 1000))
+    this.repo.library.put({ ...entry, lastPlayedAt: startedAt })
     return { ok: true, message: `Launched ${game.title}` }
+  }
+
+  /** Adds a finished run to the entry's playtime: skips runs under MIN_PLAYTIME_RUN_SEC and entries removed meanwhile. */
+  private recordPlaytime(entryId: string, elapsedSec: number): void {
+    if (elapsedSec < MIN_PLAYTIME_RUN_SEC) return
+    const entry = this.repo.library.get(entryId)
+    if (!entry) return
+    this.repo.library.put({ ...entry, playtimeSec: entry.playtimeSec + Math.round(elapsedSec) })
+    this.onLibraryChanged()
   }
 
   install(gameId: string): void {

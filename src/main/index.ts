@@ -89,7 +89,7 @@ app.whenReady().then(() => {
     () => broadcast(IPC.snapshot, service.snapshot())
   )
   const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event), mpvPids)
-  const service = new MistService(repo, runner, app.getVersion(), () => mainWindow, mpv)
+  const service: MistService = new MistService(repo, runner, app.getVersion(), () => mainWindow, mpv, () => broadcast(IPC.snapshot, service.snapshot()))
 
   ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {
     if (!MIST_METHODS.includes(method)) throw new Error(`Unknown method ${method}`)
