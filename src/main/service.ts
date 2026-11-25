@@ -10,6 +10,7 @@ import type {
   Settings,
   Snapshot,
   SourceShape,
+  SteamSearchResult,
   TmdbKind,
   TmdbSearchResult
 } from '../shared/types'
@@ -23,6 +24,8 @@ import type { MpvHost } from './mpv'
 import { backupSaves } from './saves'
 import { artUrlsOf, cachedArt, importTitle, METADATA_CONFIG, toHit, type ArtUrl } from './metadata'
 import type { TmdbCache } from './tmdbCache'
+import { GAME_METADATA_CONFIG, importSteamGame, remoteSteamArt, toSteamHit, type SteamArtUrl } from './gameMetadata'
+import { SteamClient } from './steam'
 import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
@@ -33,6 +36,9 @@ const MIN_PLAYTIME_RUN_SEC = 10
 export class MistService implements MistCalls {
   /** Where imported TMDB artwork is referenced from. */
   private readonly art: ArtUrl = cachedArt
+  private readonly steam = new SteamClient()
+  /** Where imported Steam artwork is referenced from. */
+  private readonly steamArt: SteamArtUrl = remoteSteamArt
   private readonly tmdb = new TmdbClient(() => ({ key: this.repo.settings.tmdbKey, language: this.repo.settings.tmdbLanguage }))
 
   constructor(
@@ -268,6 +274,31 @@ export class MistService implements MistCalls {
         : `${created} episode${created === 1 ? '' : 's'} created${updated ? `, ${updated} updated` : ''}`
     const files = path ? ` · ${this.repo.episodes.all().filter((episode) => episode.showId === show.id && episode.filePath).length} video file(s) found` : ''
     return { ok: true, message: `${show.title} added · ${what}${files}` }
+  }
+
+  async steamSearch(query: string): Promise<SteamSearchResult> {
+    if (query.trim().length < 2) return { ok: true, hits: [] }
+    try {
+      const result = await this.steam.search(query.trim())
+      const apps = result.items.filter((item) => item.type === 'app')
+      return { ok: true, hits: apps.slice(0, GAME_METADATA_CONFIG.searchResultLimit).map(toSteamHit) }
+    } catch (error) {
+      return { ok: false, error: (error as Error).message }
+    }
+  }
+
+  async addGameFromSteam(appId: number, source?: { input: string; shape: SourceShape }): Promise<ActionResult> {
+    let imported
+    try {
+      imported = await importSteamGame(this.steam, this.repo, appId, this.steamArt)
+    } catch (error) {
+      return { ok: false, message: (error as Error).message }
+    }
+    const { game, created } = imported
+    const added = await this.addGame(game.id, source)
+    if (!added.ok) return added
+    const facts = [game.genres?.slice(0, 3).join(', '), game.releaseDate && `released ${game.releaseDate}`].filter(Boolean).join(' · ')
+    return { ok: true, message: `${game.title} ${created ? 'added' : 'metadata updated'}${facts ? ` · ${facts}` : ''}` }
   }
 
   async refreshMetadata(showId: string): Promise<ActionResult> {

@@ -38,6 +38,13 @@ export interface Game {
   manifest?: Manifest
   /** TMDB id, metadata only. */
   tmdbId?: number
+  /** Steam app id when the metadata came from the Steam store. */
+  steamAppId?: number
+  genres?: string[]
+  /** As Steam shows it, e.g. 'Sep 25, 2025'. */
+  releaseDate?: string
+  /** Steam's 460x215 header image. */
+  header?: string
   exeHint?: string
   vetted: boolean
   addedAt: number
@@ -58,6 +65,18 @@ export interface TmdbHit {
 }
 
 export type TmdbSearchResult = { ok: true; hits: TmdbHit[] } | { ok: false; error: string }
+
+/** One Steam store search result as shown in the add flow. */
+export interface SteamHit {
+  appId: number
+  title: string
+  /** Steam's small landscape capsule (231x87), remote. */
+  capsuleUrl: string
+  /** e.g. '$20.99', 'Free', or undefined when Steam lists no price. */
+  price?: string
+}
+
+export type SteamSearchResult = { ok: true; hits: SteamHit[] } | { ok: false; error: string }
 
 export interface Show {
   id: string
@@ -251,6 +270,9 @@ export interface MistCalls {
   addShowFromTmdb(kind: TmdbKind, tmdbId: number, path?: string): Promise<ActionResult>
   /** Re-fetches a TMDB-imported title: updates metadata, never filePath, positionSec or library rows. */
   refreshMetadata(showId: string): Promise<ActionResult>
+  steamSearch(query: string): Promise<SteamSearchResult>
+  /** Creates (or updates the metadata of) a game from its Steam store page, then adds it to the library. */
+  addGameFromSteam(appId: number, source?: { input: string; shape: SourceShape }): Promise<ActionResult>
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -287,7 +309,9 @@ export const MIST_METHODS = [
   'tmdbTest',
   'tmdbSearch',
   'addShowFromTmdb',
-  'refreshMetadata'
+  'refreshMetadata',
+  'steamSearch',
+  'addGameFromSteam'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
@@ -295,7 +319,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'steamSearch']
 
 export const IPC = {
   call: 'mist:call',

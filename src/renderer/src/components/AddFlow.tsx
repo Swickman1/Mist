@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { TmdbHit, TmdbKind } from '../../../shared/types'
+import type { SteamHit, TmdbHit, TmdbKind } from '../../../shared/types'
 import { entryFor } from '../selectors'
 import { api, useMist } from '../store'
 import { SourceFields, type SourceDraft } from './AddSourcePanel'
@@ -12,11 +12,16 @@ interface Candidate {
   id: string
   title: string
   art?: string
+  /** CSS aspect-ratio for the art; posters default to 2 / 3. */
+  artAspect?: string
   meta: string
 }
 
-/** Selection is either a catalog id or a TMDB hit (`tmdb:<kind>:<id>`). */
+/** Selection is a catalog id, a TMDB hit (`tmdb:<kind>:<id>`) or a Steam hit (`steam:<appid>`). */
 const tmdbKey = (hit: TmdbHit) => `tmdb:${hit.kind}:${hit.tmdbId}`
+const steamKey = (hit: SteamHit) => `steam:${hit.appId}`
+/** Steam's search capsules are 231x87 landscape strips. */
+const STEAM_CAPSULE_ASPECT = '231 / 87'
 
 export function AddFlow() {
   const { snapshot, addFlow, openAddFlow, notify } = useMist()
@@ -25,19 +30,29 @@ export function AddFlow() {
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<TmdbKind>('tv')
   const [hits, setHits] = useState<TmdbHit[]>([])
+  const [steamHits, setSteamHits] = useState<SteamHit[]>([])
   const [searchStatus, setSearchStatus] = useState<string>('')
   const [busy, setBusy] = useState(false)
 
-  // Debounced TMDB search for the show flow.
+  // Debounced search: TMDB for shows/movies, the Steam store for games.
   useEffect(() => {
-    if (addFlow !== 'show' || query.trim().length < 2) {
+    if (!addFlow || query.trim().length < 2) {
       setHits([])
+      setSteamHits([])
       setSearchStatus('')
       return
     }
-    setSearchStatus('Searching TMDB…')
+    const where = addFlow === 'game' ? 'Steam' : 'TMDB'
+    setSearchStatus(`Searching ${where}…`)
     let current = true
     const timer = setTimeout(async () => {
+      if (addFlow === 'game') {
+        const result = await api.steamSearch(query)
+        if (!current) return
+        setSteamHits(result.ok ? result.hits : [])
+        setSearchStatus(!result.ok ? result.error : result.hits.length ? '' : 'No results on Steam')
+        return
+      }
       const result = await api.tmdbSearch(kind, query)
       if (!current) return
       if (!result.ok) {
@@ -57,9 +72,11 @@ export function AddFlow() {
   if (!addFlow) return null
 
   const isGame = addFlow === 'game'
-  const searching = !isGame && query.trim().length >= 2
+  const searching = query.trim().length >= 2
   const candidates: Candidate[] = isGame
-    ? snapshot.games.filter((g) => !entryFor(snapshot, 'game', g.id)).map((g) => ({ id: g.id, title: g.title, art: g.art, meta: g.version }))
+    ? searching
+      ? steamHits.map((hit) => ({ id: steamKey(hit), title: hit.title, art: hit.capsuleUrl, artAspect: STEAM_CAPSULE_ASPECT, meta: hit.price ?? '' }))
+      : snapshot.games.filter((g) => !entryFor(snapshot, 'game', g.id)).map((g) => ({ id: g.id, title: g.title, art: g.art, meta: g.version }))
     : searching
       ? hits.map((hit) => ({ id: tmdbKey(hit), title: hit.title, art: hit.posterUrl, meta: [hit.year, hit.rating ? `★ ${hit.rating}` : ''].filter(Boolean).join(' · ') }))
       : snapshot.shows.filter((s) => !entryFor(snapshot, 'show', s.id)).map((s) => ({ id: s.id, title: s.title, art: s.poster, meta: String(s.year) }))
@@ -69,6 +86,7 @@ export function AddFlow() {
     setDraft({ input: '', shape: 'archive' })
     setQuery('')
     setHits([])
+    setSteamHits([])
     setBusy(false)
     openAddFlow(null)
   }
@@ -78,7 +96,9 @@ export function AddFlow() {
     const input = draft.input.trim()
     setBusy(true)
     let result
-    if (isGame) result = await api.addGame(selected, input ? { input, shape: draft.shape } : undefined)
+    const source = input ? { input, shape: draft.shape } : undefined
+    if (isGame && selected.startsWith('steam:')) result = await api.addGameFromSteam(Number(selected.slice('steam:'.length)), source)
+    else if (isGame) result = await api.addGame(selected, source)
     else if (selected.startsWith('tmdb:')) {
       const [, hitKind, id] = selected.split(':')
       result = await api.addShowFromTmdb(hitKind as TmdbKind, Number(id), input || undefined)
@@ -90,19 +110,19 @@ export function AddFlow() {
 
   return (
     <Modal title={isGame ? 'Add a game' : 'Add a show or movie'} onClose={close}>
-      {!isGame && (
-        <div className="source-fields" style={{ marginBottom: 16 }}>
-          <input
-            className="field"
-            value={query}
-            placeholder={kind === 'tv' ? 'Search TMDB for a show' : 'Search TMDB for a movie'}
-            aria-label="Search TMDB"
-            autoFocus
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setSelected(null)
-            }}
-          />
+      <div className="source-fields" style={{ marginBottom: 16 }}>
+        <input
+          className="field"
+          value={query}
+          placeholder={isGame ? 'Search the Steam store for a game' : kind === 'tv' ? 'Search TMDB for a show' : 'Search TMDB for a movie'}
+          aria-label={isGame ? 'Search Steam' : 'Search TMDB'}
+          autoFocus
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setSelected(null)
+          }}
+        />
+        {!isGame && (
           <div className="segmented" role="radiogroup" aria-label="Search type">
             {(['tv', 'movie'] as TmdbKind[]).map((option) => (
               <button
@@ -119,21 +139,25 @@ export function AddFlow() {
               </button>
             ))}
           </div>
-          {searchStatus && (
-            <span className="muted" role="status" style={{ alignSelf: 'center', fontSize: 12 }}>
-              {searchStatus}
-            </span>
-          )}
-        </div>
-      )}
+        )}
+        {searchStatus && (
+          <span className="muted" role="status" style={{ alignSelf: 'center', fontSize: 12 }}>
+            {searchStatus}
+          </span>
+        )}
+      </div>
       {candidates.length === 0 ? (
-        !searching && <p className="muted">{isGame ? 'Everything in the catalog is already in your library.' : 'Search TMDB above, or everything in the catalog is already in your library.'}</p>
+        !searching && <p className="muted">{`Search ${isGame ? 'Steam' : 'TMDB'} above, or everything in the catalog is already in your library.`}</p>
       ) : (
         <ul className="pick-grid">
           {candidates.map((c) => (
             <li key={c.id}>
               <button className={`pick${selected === c.id ? ' is-selected' : ''}`} onClick={() => setSelected(c.id)} aria-pressed={selected === c.id}>
-                {c.art ? <img src={c.art} alt="" /> : <span style={{ display: 'block', aspectRatio: '2 / 3', background: 'var(--surface-2)', borderRadius: 2 }} />}
+                {c.art ? (
+                  <img src={c.art} alt="" style={c.artAspect ? { aspectRatio: c.artAspect } : undefined} />
+                ) : (
+                  <span style={{ display: 'block', aspectRatio: '2 / 3', background: 'var(--surface-2)', borderRadius: 2 }} />
+                )}
                 <span className="pick__title">{c.title}</span>
                 <span className="muted">{c.meta}</span>
                 {selected === c.id && (
