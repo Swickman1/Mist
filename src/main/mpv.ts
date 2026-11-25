@@ -63,7 +63,24 @@ async function connectPipe(path: string, timeoutMs: number): Promise<Socket> {
   }
 }
 
-type MpvMessage = { event?: string; name?: string; data?: unknown; args?: string[]; request_id?: number; error?: string }
+type MpvMessage = {
+  event?: string
+  name?: string
+  data?: unknown
+  args?: string[]
+  request_id?: number
+  error?: string
+  /** log-message */
+  level?: string
+  prefix?: string
+  text?: string
+  /** end-file */
+  reason?: string
+  file_error?: string
+}
+
+/** Warn/error log lines kept for a failure reason. */
+const LOG_BUFFER_LINES = 30
 
 /** One mpv process + its child window, for one file. */
 class Session {
@@ -71,6 +88,11 @@ class Session {
   private nextRequest = 1
   private readonly pending = new Map<number, (data: unknown) => void>()
   private stderr = ''
+  /** Rolling warn/error log-message lines from mpv. */
+  private readonly log: { level: string; line: string }[] = []
+  /** end-file reason=error detail, when mpv reported one. */
+  private fileError = ''
+  private fileLoaded = false
   private position = 0
   private duration = 0
   private paused = false
@@ -118,16 +140,16 @@ class Session {
         `--input-ipc-server=${pipe}`,
         `--hwdec=${hardwareDecode ? 'auto-safe' : 'no'}`,
         `--start=${Math.max(0, request.startAtSec)}`,
+        // Start empty and load over IPC once Mist is listening, so no log line or
+        // end-file event is lost before the pipe connects.
+        '--idle=yes',
         '--keep-open=yes',
         '--force-window=yes',
         '--osc=yes',
         '--hr-seek=yes',
         '--ytdl=no',
-        '--no-terminal',
-        '--msg-level=all=error',
-        `--title=${request.title}`,
-        '--',
-        request.filePath
+        '--msg-level=all=warn',
+        `--title=${request.title}`
       ],
       { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] }
     )
@@ -139,12 +161,19 @@ class Session {
         resolve(false)
       })
       this.process.once('error', () => resolve(false))
-      void this.attach(pipe, resolve)
+      void this.attach(pipe, request.filePath, resolve)
     })
   }
 
+  /** mpv's own words: the last error log line, else end-file's error, else a warning, else stderr. */
   get lastError(): string {
-    return this.stderr.trim().split(/\r?\n/).pop() || 'mpv exited before the file loaded'
+    const last = (level: string) => [...this.log].reverse().find((entry) => entry.level === level)?.line
+    return (
+      last('error') ??
+      (this.fileError || undefined) ??
+      last('warn') ??
+      (this.stderr.trim().split(/\r?\n/).pop() || 'mpv exited before the file loaded')
+    )
   }
 
   get lastPosition(): number {
@@ -161,7 +190,7 @@ class Session {
     })
   }
 
-  private async attach(pipe: string, onLoaded: (ok: boolean) => void): Promise<void> {
+  private async attach(pipe: string, filePath: string, onLoaded: (ok: boolean) => void): Promise<void> {
     try {
       this.socket = await connectPipe(pipe, MPV_CONFIG.pipeConnectMs)
     } catch {
@@ -180,6 +209,7 @@ class Session {
     this.socket.on('error', () => undefined)
     const step = MPV_CONFIG.seekStepSec
     for (const command of [
+      ['request_log_messages', 'warn'],
       ['observe_property', 1, 'time-pos'],
       ['observe_property', 2, 'duration'],
       ['observe_property', 3, 'pause'],
@@ -194,6 +224,7 @@ class Session {
     ]) {
       this.send(command)
     }
+    this.send(['loadfile', filePath])
   }
 
   private onMessage(message: MpvMessage, onLoaded: (ok: boolean) => void): void {
@@ -203,8 +234,17 @@ class Session {
       return
     }
     if (message.event === 'file-loaded') {
+      this.fileLoaded = true
       this.window.showInactive()
       onLoaded(true)
+    } else if (message.event === 'log-message') {
+      this.log.push({ level: message.level!, line: `${message.prefix}: ${message.text!.trim()}` })
+      if (this.log.length > LOG_BUFFER_LINES) this.log.shift()
+    } else if (message.event === 'end-file' && message.reason === 'error') {
+      this.fileError = message.file_error ?? 'error'
+      // Before file-loaded this is a failed open; afterwards a playback error.
+      if (this.fileLoaded) this.emit({ type: 'error', message: this.lastError })
+      else onLoaded(false)
     } else if (message.event === 'client-message' && message.args?.[0]) {
       this.onScriptMessage(message.args[0])
     } else if (message.event === 'property-change') {

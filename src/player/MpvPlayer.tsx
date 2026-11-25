@@ -68,6 +68,9 @@ export function MpvPlayer({
         void api.playerClose().then((position) => position !== null && write(position))
       } else if (event.type === 'close-request') {
         close.current?.()
+      } else if (event.type === 'error') {
+        // mpv failed mid-playback: hand over to the <video> backend with mpv's reason.
+        onUnavailable(event.message)
       }
     })
 
