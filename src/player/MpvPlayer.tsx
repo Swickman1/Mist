@@ -7,6 +7,18 @@ import type { PlayerProps } from './Player'
 
 const WRITE_EVERY_SEC = 10
 
+/** Mist keys → the mpv key name sent as `keypress` (mpv binds the action). */
+const MPV_KEYS: Record<string, string> = {
+  ' ': 'SPACE',
+  k: 'SPACE',
+  ArrowLeft: 'LEFT',
+  j: 'LEFT',
+  ArrowRight: 'RIGHT',
+  l: 'RIGHT',
+  f: 'f',
+  Escape: 'ESC'
+}
+
 function boundsOf(el: HTMLElement): PlayerBounds {
   const rect = el.getBoundingClientRect()
   return { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
@@ -21,11 +33,14 @@ export function MpvPlayer({
   poster,
   startAtSec,
   onPosition,
+  onClose,
   onUnavailable
 }: PlayerProps & { filePath: string; onUnavailable(reason: string): void }) {
   const screen = useRef<HTMLDivElement>(null)
   const report = useRef(onPosition)
   report.current = onPosition
+  const close = useRef(onClose)
+  close.current = onClose
   const [status, setStatus] = useState<'opening' | 'playing'>('opening')
   const [decoder, setDecoder] = useState<string>('')
 
@@ -52,10 +67,20 @@ export function MpvPlayer({
       } else if (event.type === 'ended') {
         void api.playerClose().then((position) => position !== null && write(position))
       } else if (event.type === 'close-request') {
-        // Esc inside mpv: close the surrounding modal the same way the keyboard would.
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+        close.current?.()
       }
     })
+
+    // Mist keeps focus: keys are captured here (before the modal's own Esc handler)
+    // and pressed inside mpv over IPC; the mpv window is never activated.
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = MPV_KEYS[event.key]
+      if (!key || event.ctrlKey || event.altKey || event.metaKey || !playing) return
+      event.preventDefault()
+      event.stopPropagation()
+      void api.playerKey(key)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
 
     void api.playerOpen({ filePath, title, startAtSec, bounds: boundsOf(el) }).then((result) => {
       if (!alive) return
@@ -84,6 +109,7 @@ export function MpvPlayer({
       alive = false
       off()
       cancelAnimationFrame(frame)
+      window.removeEventListener('keydown', onKeyDown, true)
       void api.playerClose().then((position) => playing && position !== null && report.current(position))
     }
     // One mpv session per mounted file; Player is keyed by episode.

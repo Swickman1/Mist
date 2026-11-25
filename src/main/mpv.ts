@@ -184,11 +184,10 @@ class Session {
       ['observe_property', 3, 'pause'],
       ['observe_property', 4, 'hwdec-current'],
       ['observe_property', 5, 'eof-reached'],
+      // Mist translates its keys to these names and sends them as `keypress`; the same
+      // bindings serve anyone who clicked into the mpv window. SPACE keeps mpv's default.
       ['keybind', 'RIGHT', `seek ${step}`],
       ['keybind', 'LEFT', `seek -${step}`],
-      ['keybind', 'l', `seek ${step}`],
-      ['keybind', 'j', `seek -${step}`],
-      ['keybind', 'k', 'cycle pause'],
       ['keybind', 'ESC', 'script-message mist-close']
     ]) {
       this.send(command)
@@ -231,6 +230,11 @@ class Session {
   private emitTime(): void {
     this.lastTimeEvent = this.position
     this.emit({ type: 'time', position: this.position, duration: this.duration, paused: this.paused })
+  }
+
+  /** Presses a key inside mpv without giving its window focus. */
+  keypress(key: string): void {
+    this.send(['keypress', key])
   }
 
   private send(command: unknown[]): number {
@@ -307,6 +311,10 @@ export class MpvHost {
   setBounds(bounds: PlayerBounds): void {
     this.bounds = bounds
     this.session?.setBounds(bounds)
+  }
+
+  key(key: string): void {
+    this.session?.keypress(key)
   }
 
   async close(): Promise<number | null> {

@@ -27,6 +27,7 @@ export function PlayerModal() {
         poster={episode.still}
         startAtSec={episode.positionSec}
         onPosition={(positionSec) => void api.setEpisodePosition(episode.id, positionSec)}
+        onClose={() => openPlayer(null)}
       />
     </Modal>
   )

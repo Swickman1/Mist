@@ -16,6 +16,8 @@ export interface PlayerProps {
   startAtSec: number
   /** Called every 10s while playing, and on pause, end and close. */
   onPosition(positionSec: number): void
+  /** Asks the host to close the player (Esc inside mpv). */
+  onClose?(): void
 }
 
 export function Player(props: PlayerProps) {

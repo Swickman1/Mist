@@ -208,6 +208,8 @@ export interface MistCalls {
   playerBounds(bounds: PlayerBounds): void
   /** Stops mpv and returns its last position in seconds (null when nothing was playing). */
   playerClose(): Promise<number | null>
+  /** Sends one mpv key name (SPACE, LEFT, RIGHT, f, ESC …) as `keypress`, so Mist keeps keyboard focus. */
+  playerKey(key: string): void
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -239,7 +241,8 @@ export const MIST_METHODS = [
   'setLaunchAtLogin',
   'playerOpen',
   'playerBounds',
-  'playerClose'
+  'playerClose',
+  'playerKey'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
@@ -247,7 +250,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey']
 
 export const IPC = {
   call: 'mist:call',

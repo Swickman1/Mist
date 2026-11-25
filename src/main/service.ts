@@ -197,6 +197,10 @@ export class MistService implements MistCalls {
     return this.mpv.close()
   }
 
+  playerKey(key: string): void {
+    this.mpv.key(key)
+  }
+
   async pickFolder(): Promise<string | null> {
     const win = this.window()
     const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'] }
