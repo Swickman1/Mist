@@ -25,6 +25,7 @@ import { backupSaves } from './saves'
 import { artUrlsOf, cacheKey, cachedArt, importTitle, METADATA_CONFIG, toHit, type ArtUrl } from './metadata'
 import type { ArtCache } from './artCache'
 import { cachedSteamArt, GAME_METADATA_CONFIG, importSteamGame, steamArtUrlsOf, toSteamHit, type SteamArtUrl } from './gameMetadata'
+import { normaliseHosts, SUGGESTED_DOWNLOAD_HOSTS } from './net'
 import { SteamClient } from './steam'
 import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
@@ -302,6 +303,17 @@ export class MistService implements MistCalls {
     if (!added.ok) return added
     const facts = [game.genres?.slice(0, 3).join(', '), game.releaseDate && `released ${game.releaseDate}`].filter(Boolean).join(' · ')
     return { ok: true, message: `${game.title} ${created ? 'added' : 'metadata updated'}${facts ? ` · ${facts}` : ''}` }
+  }
+
+  async setDownloadHosts(text: string): Promise<ActionResult> {
+    const result = normaliseHosts(text.split(/\r?\n/))
+    if (!result.ok) return { ok: false, message: result.error }
+    this.updateSettings({ downloadHosts: result.hosts })
+    return { ok: true, message: `${result.hosts.length} download host(s) allowed` }
+  }
+
+  async suggestedDownloadHosts(): Promise<string[]> {
+    return SUGGESTED_DOWNLOAD_HOSTS
   }
 
   async refreshGameMetadata(gameId: string): Promise<ActionResult> {

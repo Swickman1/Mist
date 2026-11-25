@@ -46,6 +46,14 @@ function PathRow({ label, hint, field, settings }: { label: string; hint: string
 export function Settings() {
   const { snapshot, notify } = useMist()
   const [tmdbStatus, setTmdbStatus] = useState<ActionResult | null>(null)
+  const [hostsText, setHostsText] = useState(snapshot.settings.downloadHosts.join('\n'))
+  const [hostsStatus, setHostsStatus] = useState<ActionResult | null>(null)
+
+  const saveHosts = async (text: string) => {
+    const result = await api.setDownloadHosts(text)
+    setHostsStatus(result)
+    if (result.ok) setHostsText(text.split(/\r?\n/).map((line) => line.trim().toLowerCase()).filter(Boolean).join('\n'))
+  }
   const { settings } = snapshot
   const exclusionCommand = [settings.libraryPath, settings.stagingPath].map((p) => `Add-MpPreference -ExclusionPath "${p}"`).join('\n')
 
@@ -81,6 +89,45 @@ export function Settings() {
             aria-label="Concurrent downloads"
           />
           <span className="setting__value">{settings.concurrentDownloads}</span>
+        </Row>
+        <Row label="Download hosts" hint="HTTP(S) sources may only download from these hosts. One hostname per line; subdomains are included.">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+            <textarea
+              className="field"
+              rows={5}
+              spellCheck={false}
+              value={hostsText}
+              placeholder={'files.example.com\nmy-nas.local'}
+              aria-label="Download hosts"
+              style={{ height: 'auto', padding: 8, fontFamily: "'Cascadia Mono', Consolas, monospace", fontSize: 12, resize: 'vertical' }}
+              onChange={(e) => {
+                setHostsText(e.target.value)
+                setHostsStatus(null)
+              }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="btn btn--ghost" onClick={() => saveHosts(hostsText)}>
+                Save hosts
+              </button>
+              <button
+                className="btn btn--ghost"
+                onClick={async () => {
+                  const suggested = await api.suggestedDownloadHosts()
+                  const current = hostsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+                  const merged = [...current, ...suggested.filter((host) => !current.includes(host))].join('\n')
+                  setHostsText(merged)
+                  await saveHosts(merged)
+                }}
+              >
+                Add suggested hosts
+              </button>
+              {hostsStatus && (
+                <span className={hostsStatus.ok ? 'muted' : 'text-amber'} role="status" style={{ fontSize: 12 }}>
+                  {hostsStatus.message}
+                </span>
+              )}
+            </div>
+          </div>
         </Row>
         <Row label="Sources" hint="Where Mist may read from">
           <ul className="toggles">

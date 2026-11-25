@@ -174,6 +174,8 @@ export interface Settings {
   tmdbKey: string
   /** TMDB language tag, e.g. en-US. */
   tmdbLanguage: string
+  /** Hosts HTTP(S) sources may download from: bare hostnames, subdomains implied. */
+  downloadHosts: string[]
 }
 
 /** Launch-at-login is OS state; only a packaged install can register itself. */
@@ -275,6 +277,10 @@ export interface MistCalls {
   addGameFromSteam(appId: number, source?: { input: string; shape: SourceShape }): Promise<ActionResult>
   /** Re-fetches a Steam-linked game's store page: metadata only, never source, manifest, exeHint or library rows. */
   refreshGameMetadata(gameId: string): Promise<ActionResult>
+  /** Validates and saves the download host allowlist (one hostname per line). */
+  setDownloadHosts(text: string): Promise<ActionResult>
+  /** The built-in suggestions for the allowlist. */
+  suggestedDownloadHosts(): Promise<string[]>
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -314,7 +320,9 @@ export const MIST_METHODS = [
   'refreshMetadata',
   'steamSearch',
   'addGameFromSteam',
-  'refreshGameMetadata'
+  'refreshGameMetadata',
+  'setDownloadHosts',
+  'suggestedDownloadHosts'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
@@ -322,7 +330,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'steamSearch']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'steamSearch', 'suggestedDownloadHosts']
 
 export const IPC = {
   call: 'mist:call',

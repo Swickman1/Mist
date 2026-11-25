@@ -217,6 +217,7 @@ export function defaultSettings(home: string): Settings {
     hardwareDecode: true,
     mpvBannerDismissed: false,
     tmdbKey: '',
-    tmdbLanguage: 'en-US'
+    tmdbLanguage: 'en-US',
+    downloadHosts: []
   }
 }

@@ -6,6 +6,7 @@ import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome
 import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
 import { MpvHost, MpvPidFile } from './mpv'
+import { hostAllowed } from './net'
 import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media'
 import { migrateRemoteArt } from './metadata'
 import { Repository } from './repository'
@@ -21,17 +22,22 @@ let mainWindow: BrowserWindow | undefined
 /** Local protocols Mist always serves from disk or memory. */
 const LOCAL_PROTOCOLS = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:', `${MEDIA_SCHEME}:`]
 
-/** The only remote hosts Mist may reach, over https, for title metadata and artwork (TMDB, Steam store). */
-export const ALLOWED_HTTPS_HOSTS = ['image.tmdb.org', 'api.themoviedb.org', 'store.steampowered.com', 'shared.akamai.steamstatic.com']
+/** Fixed metadata hosts (TMDB, Steam store) Mist may reach over https. */
+export const METADATA_HOSTS = ['image.tmdb.org', 'api.themoviedb.org', 'store.steampowered.com', 'shared.akamai.steamstatic.com']
+
+/** Everything the session may reach over https: the metadata hosts plus the user's download hosts, read live. */
+function allowedHttpsHosts(downloadHosts: readonly string[]): string[] {
+  return [...METADATA_HOSTS, ...downloadHosts]
+}
 
 /** Everything outside the local protocols, the dev server and the allowlist is cancelled and logged. */
-function blockNetwork(): void {
+function blockNetwork(downloadHosts: () => readonly string[]): void {
   const devOrigin = devServerUrl ? new URL(devServerUrl) : undefined
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const url = new URL(details.url)
     const local = LOCAL_PROTOCOLS.includes(url.protocol)
     const devServer = devOrigin !== undefined && url.host === devOrigin.host && ['http:', 'ws:'].includes(url.protocol)
-    const metadata = url.protocol === 'https:' && ALLOWED_HTTPS_HOSTS.includes(url.hostname)
+    const metadata = url.protocol === 'https:' && hostAllowed(url.hostname, allowedHttpsHosts(downloadHosts()))
     const allowed = local || devServer || metadata
     if (!allowed) console.warn(`[mist] blocked network request: ${details.url}`)
     callback({ cancel: !allowed })
@@ -79,13 +85,14 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(() => {
-  blockNetwork()
   // mpv processes left by a crash or hard kill of the previous run.
   const mpvPids = new MpvPidFile(join(app.getPath('userData'), 'mpv-pids.json'))
   const swept = mpvPids.sweep()
   if (swept.length) console.warn(`[mist] killed stale mpv processes: ${swept.join(', ')}`)
 
   const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
+  // The session guard reads the download hosts live, so Settings edits apply at once.
+  blockNetwork(() => repo.settings.downloadHosts)
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
   const runner = new JobRunner(
     repo,
