@@ -88,8 +88,9 @@ async function serveArt(url: string, caches: Record<ArtSource, ArtCache>): Promi
 }
 
 /** Serves indexed episode files and cached artwork; anything else is 403. */
-export function handleMediaRequests(repo: Repository, caches: Record<ArtSource, ArtCache>): void {
-  protocol.handle(MEDIA_SCHEME, async (request) => {
+/** Serves mist-media:// on the window's session (the global protocol.handle only covers the default session). */
+export function handleMediaRequests(repo: Repository, caches: Record<ArtSource, ArtCache>, appSession: Electron.Session): void {
+  appSession.protocol.handle(MEDIA_SCHEME, async (request) => {
     if (new URL(request.url).hostname in ART_SOURCES) return serveArt(request.url, caches)
     const path = mediaPath(request.url)
     if (!repo.episodes.all().some((episode) => episode.filePath === path)) return new Response('Forbidden', { status: 403 })

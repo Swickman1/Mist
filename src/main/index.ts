@@ -168,7 +168,7 @@ app.whenReady().then(async () => {
   reconcileInstalled(repo)
   migrateRemoteArt(repo)
   migrateRemoteSteamArt(repo)
-  handleMediaRequests(repo, { tmdb: tmdbCache, steam: steamCache })
+  handleMediaRequests(repo, { tmdb: tmdbCache, steam: steamCache }, appSession)
   void indexAllShows(repo).then((changed) => changed && broadcast(IPC.snapshot, service.snapshot()))
   runner.start()
   mainWindow = createWindow(repo.settings.theme)
