@@ -60,6 +60,13 @@
           "*.dll",
           "LICENSE"
         ]
+      },
+      {
+        "from": "index",
+        "to": "index",
+        "filter": [
+          "*.json"
+        ]
       }
     ],
     "npmRebuild": false,
