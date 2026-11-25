@@ -27,8 +27,9 @@ export class TmdbCache {
     await writeFile(join(this.dir, key, `${name}.json`), JSON.stringify(data))
   }
 
+  /** <asset>.<size>.<tmdb file>: a changed TMDB image (after refresh) is a new file, never a stale hit. */
   imageFile(ref: TmdbArtRef): string {
-    return join(this.dir, ref.key, `${ref.asset}${extname(ref.src)}`)
+    return join(this.dir, ref.key, `${ref.asset}.${ref.src.replace('/', '.')}`)
   }
 
   /**

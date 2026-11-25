@@ -249,6 +249,8 @@ export interface MistCalls {
   tmdbSearch(kind: TmdbKind, query: string): Promise<TmdbSearchResult>
   /** Creates (or updates) the show/movie from TMDB with its seasons and episodes, then adds it to the library. */
   addShowFromTmdb(kind: TmdbKind, tmdbId: number, path?: string): Promise<ActionResult>
+  /** Re-fetches a TMDB-imported title: updates metadata, never filePath, positionSec or library rows. */
+  refreshMetadata(showId: string): Promise<ActionResult>
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -284,7 +286,8 @@ export const MIST_METHODS = [
   'playerKey',
   'tmdbTest',
   'tmdbSearch',
-  'addShowFromTmdb'
+  'addShowFromTmdb',
+  'refreshMetadata'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.

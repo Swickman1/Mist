@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Stat } from '../components/Stat'
@@ -7,6 +8,7 @@ import { api, useMist } from '../store'
 export function ShowPage() {
   const { id } = useParams()
   const { snapshot, openPlayer, notify } = useMist()
+  const [refreshing, setRefreshing] = useState(false)
   const show = snapshot.shows.find((s) => s.id === id)
   if (!show) return <div className="page empty">Show not found.</div>
 
@@ -47,6 +49,19 @@ export function ShowPage() {
           {!entry && (
             <button className="btn btn--ghost" onClick={async () => notify(await api.addShow(show.id))}>
               Add to library
+            </button>
+          )}
+          {show.tmdbKind && (
+            <button
+              className="btn btn--ghost"
+              disabled={refreshing}
+              onClick={async () => {
+                setRefreshing(true)
+                notify(await api.refreshMetadata(show.id))
+                setRefreshing(false)
+              }}
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh metadata'}
             </button>
           )}
         </div>

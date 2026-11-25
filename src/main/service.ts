@@ -270,6 +270,20 @@ export class MistService implements MistCalls {
     return { ok: true, message: `${show.title} added · ${what}${files}` }
   }
 
+  async refreshMetadata(showId: string): Promise<ActionResult> {
+    const show = this.repo.shows.get(showId)
+    if (!show?.tmdbKind || !show.tmdbId) return { ok: false, message: 'This title was not imported from TMDB' }
+    let imported
+    try {
+      imported = await importTitle(this.tmdb, this.repo, this.tmdbCache, show.tmdbKind, show.tmdbId, this.art)
+    } catch (error) {
+      return { ok: false, message: (error as Error).message }
+    }
+    void this.tmdbCache.prefetch(artUrlsOf(this.repo, showId))
+    const { created, updated } = imported
+    return { ok: true, message: `${imported.show.title} refreshed · ${updated} episode(s) updated${created ? `, ${created} new` : ''}` }
+  }
+
   async tmdbTest(): Promise<ActionResult> {
     try {
       await this.tmdb.testKey()
