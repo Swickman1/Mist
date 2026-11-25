@@ -4,7 +4,7 @@
 // to software inside mpv when a hardware decoder cannot start; if mpv itself
 // fails to load the file with hwdec on, it is relaunched once with hwdec=no.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { app, BaseWindow, screen, type BrowserWindow } from 'electron'
@@ -63,6 +63,62 @@ async function connectPipe(path: string, timeoutMs: number): Promise<Socket> {
   }
 }
 
+/**
+ * PIDs of mpv processes Mist spawned, persisted so a crash or hard kill of Mist
+ * cannot leave an orphan behind: the next launch sweeps whatever is still listed.
+ */
+export class MpvPidFile {
+  constructor(private readonly file: string) {}
+
+  private read(): number[] {
+    try {
+      const pids = JSON.parse(readFileSync(this.file, 'utf8')) as unknown
+      return Array.isArray(pids) ? pids.filter((pid): pid is number => Number.isInteger(pid)) : []
+    } catch {
+      return []
+    }
+  }
+
+  private write(pids: number[]): void {
+    writeFileSync(this.file, JSON.stringify(pids))
+  }
+
+  record(pid: number): void {
+    this.write([...new Set([...this.read(), pid])])
+  }
+
+  forget(pid: number): void {
+    this.write(this.read().filter((entry) => entry !== pid))
+  }
+
+  /** Kills every listed PID that is still alive as mpv.exe, then clears the file. Returns the PIDs killed. */
+  sweep(): number[] {
+    const killed: number[] = []
+    for (const pid of this.read()) {
+      if (imageName(pid)?.toLowerCase() !== 'mpv.exe') continue
+      try {
+        process.kill(pid)
+        killed.push(pid)
+      } catch {
+        // already gone
+      }
+    }
+    this.write([])
+    return killed
+  }
+}
+
+/** Image name of a running PID (tasklist), or undefined when it is not running. */
+function imageName(pid: number): string | undefined {
+  try {
+    const row = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { windowsHide: true, encoding: 'utf8' })
+    const match = /^"([^"]+)","(\d+)"/m.exec(row)
+    return match && Number(match[2]) === pid ? match[1] : undefined
+  } catch {
+    return undefined
+  }
+}
+
 type MpvMessage = {
   event?: string
   name?: string
@@ -112,6 +168,7 @@ class Session {
     private readonly emit: (event: PlayerEvent) => void,
     /** script-message names from mpv (mist-close, mist-fullscreen), routed to the host. */
     private readonly onScriptMessage: (name: string) => void,
+    pids: MpvPidFile,
     sessionId: number
   ) {
     this.window = new BaseWindow({
@@ -153,6 +210,11 @@ class Session {
       ],
       { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] }
     )
+    const pid = this.process.pid
+    if (pid !== undefined) {
+      pids.record(pid)
+      this.process.once('exit', () => pids.forget(pid))
+    }
     this.process.stderr?.on('data', (chunk: Buffer) => (this.stderr = (this.stderr + chunk.toString()).slice(-2000)))
 
     this.loaded = new Promise<boolean>((resolve) => {
@@ -337,7 +399,8 @@ export class MpvHost {
   constructor(
     private readonly host: () => BrowserWindow | undefined,
     private readonly hardwareDecode: () => boolean,
-    private readonly emit: (event: PlayerEvent) => void
+    private readonly emit: (event: PlayerEvent) => void,
+    private readonly pids: MpvPidFile
   ) {}
 
   async open(request: PlayerOpenRequest): Promise<PlayerOpenResult> {
@@ -353,7 +416,7 @@ export class MpvHost {
     const attempts = this.hardwareDecode() ? [true, false] : [false]
     let reason = ''
     for (const hardware of attempts) {
-      const session = new Session(mpvPath, win, request, hardware, this.emit, this.onScriptMessage, ++this.sessionCount)
+      const session = new Session(mpvPath, win, request, hardware, this.emit, this.onScriptMessage, this.pids, ++this.sessionCount)
       this.session = session
       const ok = await Promise.race([session.loaded, sleep(MPV_CONFIG.loadTimeoutMs).then(() => false)])
       if (generation !== this.generation) {

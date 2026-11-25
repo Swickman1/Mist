@@ -5,7 +5,7 @@ import { MEDIA_SCHEME } from '../shared/media'
 import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome'
 import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
-import { MpvHost } from './mpv'
+import { MpvHost, MpvPidFile } from './mpv'
 import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media'
 import { Repository } from './repository'
 import { MistService } from './service'
@@ -75,6 +75,10 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   blockNetwork()
+  // mpv processes left by a crash or hard kill of the previous run.
+  const mpvPids = new MpvPidFile(join(app.getPath('userData'), 'mpv-pids.json'))
+  const swept = mpvPids.sweep()
+  if (swept.length) console.warn(`[mist] killed stale mpv processes: ${swept.join(', ')}`)
 
   const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
@@ -84,7 +88,7 @@ app.whenReady().then(() => {
     (jobs) => broadcast(IPC.jobs, jobs),
     () => broadcast(IPC.snapshot, service.snapshot())
   )
-  const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event))
+  const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event), mpvPids)
   const service = new MistService(repo, runner, app.getVersion(), () => mainWindow, mpv)
 
   ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {
