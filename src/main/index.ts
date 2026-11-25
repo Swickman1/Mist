@@ -98,7 +98,8 @@ app.whenReady().then(() => {
     repo,
     (game, stagingDir, signal) => installGame(game, stagingDir, repo.settings.libraryPath, signal),
     (jobs) => broadcast(IPC.jobs, jobs),
-    () => broadcast(IPC.snapshot, service.snapshot())
+    () => broadcast(IPC.snapshot, service.snapshot()),
+    { hosts: () => repo.settings.downloadHosts, userAgent: `Mist/${app.getVersion()}` }
   )
   const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event), mpvPids)
   const tmdbCache = new ArtCache(app.getPath('userData'), 'tmdb-cache', 'tmdb', TMDB_CONFIG.imageBase)

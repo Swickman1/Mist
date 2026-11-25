@@ -22,6 +22,8 @@ export interface Manifest {
   version: string
   parts: Part[]
   createdAt: number
+  /** For URL sources: the page the parts came from, sent as Referer (survives restarts). */
+  sourcePage?: string
 }
 
 export interface Game {

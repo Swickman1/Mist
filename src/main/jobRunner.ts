@@ -7,7 +7,8 @@ import { RUNNING_STATES, VISIBLE_STATES, type DownloadJob, type Game, type JobSt
 import { resolverFor } from '../sources'
 import { sha256File } from '../verify'
 import type { Repository } from './repository'
-import { clearStaging, Transfer, type TransferPhase } from './transfer'
+import type { HttpContext } from './net'
+import { clearStaging, isUrlPart, Transfer, type TransferPhase } from './transfer'
 
 const TICK_MS = 500
 /** Weight of the newest speed sample in the smoothed speed. */
@@ -42,7 +43,9 @@ export class JobRunner {
     private readonly repo: Repository,
     private readonly install: Installer,
     private readonly onJobsChanged: (jobs: DownloadJob[]) => void,
-    private readonly onLibraryChanged: () => void
+    private readonly onLibraryChanged: () => void,
+    /** Allowlist + User-Agent for URL sources. */
+    private readonly http: HttpContext
   ) {}
 
   start(): void {
@@ -202,14 +205,21 @@ export class JobRunner {
       const game = this.repo.games.get(job.gameId)!
       const manifest = await this.manifestFor(game, signal)
       const stagingDir = this.stagingDir(game.id)
-      const transfer = new Transfer(stagingDir, manifest.parts, {
-        onBytes: (bytes) => (live.bytesDone = bytes),
-        onPhase: (phase, detail) => this.set(job.id, { state: PHASE_STATE[phase], reason: phase === 'stalled' ? detail : undefined })
-      })
+      const transfer = new Transfer(
+        stagingDir,
+        manifest.parts,
+        {
+          onBytes: (bytes) => (live.bytesDone = bytes),
+          onPhase: (phase, detail) => this.set(job.id, { state: PHASE_STATE[phase], reason: phase === 'stalled' ? detail : undefined })
+        },
+        { http: this.http, referer: manifest.sourcePage }
+      )
       live.transfer = transfer
       this.set(job.id, { bytesTotal: transfer.bytesTotal })
       signal.throwIfAborted()
       await transfer.run()
+      // Persist hashes pinned on arrival for URL parts that had none published.
+      this.repo.games.put({ ...this.repo.games.get(game.id)!, parts: manifest.parts, manifest })
 
       this.set(job.id, { state: 'extracting', bytesDone: transfer.bytesTotal, progress: 1, speedBps: 0, reason: undefined })
       const installed = await this.install(this.repo.games.get(game.id)!, stagingDir, signal)
@@ -227,20 +237,22 @@ export class JobRunner {
   /** Resolves the game's source into parts with pinned hashes, reusing a still-valid manifest. */
   private async manifestFor(game: Game, signal: AbortSignal): Promise<Manifest> {
     if (!game.source || !game.shape) throw new Error('No source set for this game')
-    const parts = await resolverFor(game.shape).resolve({ gameId: game.id, input: game.source, shape: game.shape })
+    const parts = await resolverFor(game.shape).resolve({ gameId: game.id, input: game.source, shape: game.shape, http: this.http })
     const pinned = game.manifest?.parts
     const unchanged =
       pinned !== undefined &&
       game.manifest!.version === game.version &&
       pinned.length === parts.length &&
-      pinned.every((part, i) => part.path === parts[i].path && part.sizeBytes === parts[i].sizeBytes && part.sha256)
+      pinned.every((part, i) => (part.path ?? part.url) === (parts[i].path ?? parts[i].url) && part.sizeBytes === parts[i].sizeBytes && part.sha256)
     if (unchanged) return game.manifest!
 
-    // No sidecar checksum: hash the source once so every staged copy can be checked against it.
+    // No sidecar checksum: hash a local source once so every staged copy can be checked
+    // against it. URL parts cannot be hashed before download; Transfer pins them on arrival.
     for (const part of parts) {
-      if (!part.sha256) part.sha256 = await sha256File(part.path!, signal)
+      if (!part.sha256 && !isUrlPart(part)) part.sha256 = await sha256File(part.path!, signal)
     }
-    const manifest: Manifest = { version: game.version, parts, createdAt: Date.now() }
+    const sourcePage = /^https?:\/\//i.test(game.source) ? game.source : undefined
+    const manifest: Manifest = { version: game.version, parts, createdAt: Date.now(), ...(sourcePage ? { sourcePage } : {}) }
     this.repo.games.put({ ...this.repo.games.get(game.id)!, parts, manifest })
     return manifest
   }

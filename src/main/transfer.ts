@@ -3,9 +3,10 @@
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, rename, rm, stat, statfs, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { Transform, type Readable } from 'node:stream'
+import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { Part } from '../shared/types'
+import { httpFetch, HostNotAllowedError, type HttpContext } from './net'
 import { sha256File } from '../verify'
 
 export const TRANSFER_CONFIG = {
@@ -19,7 +20,7 @@ export const TRANSFER_CONFIG = {
   tempSuffix: '.part'
 }
 
-export type TransferErrorCode = 'disk_full' | 'stalled' | 'hash_mismatch' | 'source_missing'
+export type TransferErrorCode = 'disk_full' | 'stalled' | 'blocked' | 'hash_mismatch' | 'source_missing'
 
 export class TransferError extends Error {
   constructor(
@@ -43,7 +44,24 @@ export interface TransferOptions {
   stallMs?: number
   stallBackoffMs?: number[]
   freeBytes?: (dir: string) => Promise<number>
+  /** Reader for local parts (tests override it). */
   openSource?: (part: Part, start: number) => Readable
+  /** Required for URL parts: allowlist + User-Agent. */
+  http?: HttpContext
+  /** Sent as Referer for URL parts: the page the parts came from. */
+  referer?: string
+}
+
+/** A part to download over HTTP(S) rather than copy from disk. */
+export function isUrlPart(part: Part): boolean {
+  return !part.path && /^https?:\/\//i.test(part.url)
+}
+
+/** 'bytes <start>-<end>/<total>' -> start and total (total undefined when '*'). */
+function parseContentRange(header: string | null): { start: number; total?: number } | undefined {
+  const match = header && /^bytes (\d+)-\d+\/(\d+|\*)$/i.exec(header.trim())
+  if (!match) return undefined
+  return { start: Number(match[1]), total: match[2] === '*' ? undefined : Number(match[2]) }
 }
 
 const GB = 1024 ** 3
@@ -95,6 +113,8 @@ export class Transfer {
   private readonly stallBackoffMs: number[]
   private readonly freeBytes: (dir: string) => Promise<number>
   private readonly openSource: (part: Part, start: number) => Readable
+  private readonly http?: HttpContext
+  private readonly referer?: string
 
   constructor(
     readonly stagingDir: string,
@@ -106,6 +126,8 @@ export class Transfer {
     this.stallBackoffMs = options.stallBackoffMs ?? TRANSFER_CONFIG.stallBackoffMs
     this.freeBytes = options.freeBytes ?? statfsFree
     this.openSource = options.openSource ?? ((part, start) => createReadStream(part.path!, { start }))
+    this.http = options.http
+    this.referer = options.referer
   }
 
   get signal(): AbortSignal {
@@ -165,7 +187,13 @@ export class Transfer {
   private async copyVerified(part: Part): Promise<void> {
     for (let attempt = 0; ; attempt++) {
       await this.copyWithStallRetry(part)
-      if (!part.sha256) return
+      if (!part.sha256) {
+        // No published hash (a URL part without a sidecar): pin what arrived, so a
+        // resume or a tampered staging file is still caught on later runs.
+        this.events.onPhase('verifying', part.name)
+        part.sha256 = await sha256File(this.stagedPath(part), this.signal)
+        return
+      }
       this.events.onPhase('verifying', part.name)
       const digest = await sha256File(this.stagedPath(part), this.signal)
       if (digest === part.sha256) return
@@ -184,12 +212,15 @@ export class Transfer {
         await this.copy(part)
         return
       } catch (error) {
-        if (!(error instanceof TransferError) || error.code !== 'stalled') throw error
+        // Stalls and host refusals (403/429) share the same retry budget.
+        if (!(error instanceof TransferError) || (error.code !== 'stalled' && error.code !== 'blocked')) throw error
         if (retry >= this.stallBackoffMs.length) {
+          if (error.code === 'blocked') throw new TransferError('blocked', 'the host wants a browser check')
           throw new TransferError('stalled', `no progress for ${this.stallMs / 1000}s on ${part.name} after ${retry} retries`)
         }
         const wait = this.stallBackoffMs[retry]
-        this.events.onPhase('stalled', `No progress for ${this.stallMs / 1000}s on ${part.name}. Retry ${retry + 1} of ${this.stallBackoffMs.length} in ${wait / 1000}s`)
+        const why = error.code === 'blocked' ? `The host refused ${part.name} (${error.message.replace(/^blocked: /, '')})` : `No progress for ${this.stallMs / 1000}s on ${part.name}`
+        this.events.onPhase('stalled', `${why}. Retry ${retry + 1} of ${this.stallBackoffMs.length} in ${wait / 1000}s`)
         await sleep(wait, this.signal)
       }
     }
@@ -208,16 +239,38 @@ export class Transfer {
       await unlink(temp)
       offset = 0
     }
-    if ((await sizeOf(part.path!)) === undefined) throw new TransferError('source_missing', `${part.path} is not reachable`)
+    const remote = isUrlPart(part)
+    // Only local parts can be stat'ed up front; a URL part's reachability is its response.
+    if (!remote && (await sizeOf(part.path!)) === undefined) throw new TransferError('source_missing', `${part.path} is not reachable`)
     this.setStaged(part, offset)
 
     if (offset < part.sizeBytes) {
       const stall = new AbortController()
       let lastProgress = Date.now()
-      let copied = offset
       const watchdog = setInterval(() => {
         if (Date.now() - lastProgress > this.stallMs) stall.abort(new TransferError('stalled', part.name))
       }, Math.min(TRANSFER_CONFIG.watchdogMs, this.stallMs / 2))
+      const signal = AbortSignal.any([this.signal, stall.signal])
+      let source: Readable
+      try {
+        if (remote) {
+          const opened = await this.openUrl(part, offset, signal)
+          if (opened.restart) {
+            // The server ignored Range: start this part over from byte zero.
+            await rm(temp, { force: true })
+            offset = 0
+            this.setStaged(part, 0)
+          }
+          source = opened.stream
+        } else {
+          source = this.openSource(part, offset)
+        }
+      } catch (error) {
+        clearInterval(watchdog)
+        if (stall.signal.aborted && !this.signal.aborted) throw stall.signal.reason
+        throw this.signal.aborted ? this.signal.reason : error
+      }
+      let copied = offset
       const counter = new Transform({
         transform: (chunk: Buffer, _encoding, callback) => {
           copied += chunk.length
@@ -227,20 +280,59 @@ export class Transfer {
         }
       })
       try {
-        await pipeline(this.openSource(part, offset), counter, createWriteStream(temp, { flags: 'a' }), {
-          signal: AbortSignal.any([this.signal, stall.signal])
-        })
+        await pipeline(source, counter, createWriteStream(temp, { flags: 'a' }), { signal })
       } catch (error) {
         if (stall.signal.aborted && !this.signal.aborted) throw stall.signal.reason
-        throw this.signal.aborted ? this.signal.reason : error
+        if (this.signal.aborted) throw this.signal.reason
+        // A dropped connection mid-body is retried like a stall, resuming from what arrived.
+        if (remote) throw new TransferError('stalled', `connection lost on ${part.name}: ${(error as Error).message}`)
+        throw error
       } finally {
         clearInterval(watchdog)
       }
     }
 
+    // Byte count before the hash step: a short read is source_missing, not a hash failure.
     const finalSize = await sizeOf(temp)
     if (finalSize !== part.sizeBytes) throw new TransferError('source_missing', `${part.name} ended at ${finalSize} of ${part.sizeBytes} bytes`)
     await rename(temp, dest)
+  }
+
+  /**
+   * Opens a URL part at `offset` with a Range request (redirects re-checked against
+   * the allowlist). 206 resumes; 200 means the server ignored Range, so the caller
+   * restarts the part from zero.
+   */
+  private async openUrl(part: Part, offset: number, signal: AbortSignal): Promise<{ stream: Readable; restart: boolean }> {
+    if (!this.http) throw new TransferError('source_missing', `${part.name}: no HTTP context for a URL part`)
+    let response: Response
+    try {
+      ;({ response } = await httpFetch(part.url, { rangeFrom: offset, referer: this.referer, signal }, this.http))
+    } catch (error) {
+      if (error instanceof HostNotAllowedError) throw new TransferError('source_missing', error.message)
+      if (signal.aborted) throw error
+      throw new TransferError('stalled', `could not connect for ${part.name}: ${(error as Error).message}`)
+    }
+    const cancel = () => void response.body?.cancel().catch(() => undefined)
+    if (response.status === 403 || response.status === 429) {
+      cancel()
+      throw new TransferError('blocked', `HTTP ${response.status}`)
+    }
+    if (response.status === 206) {
+      const range = parseContentRange(response.headers.get('content-range'))
+      if (!range || range.start !== offset) {
+        cancel()
+        throw new TransferError('source_missing', `${part.name}: server resumed at the wrong offset`)
+      }
+      if (range.total !== undefined && range.total !== part.sizeBytes) {
+        cancel()
+        throw new TransferError('source_missing', `${part.name} is now ${range.total} bytes, expected ${part.sizeBytes}`)
+      }
+      return { stream: Readable.fromWeb(response.body as never), restart: false }
+    }
+    if (response.status === 200) return { stream: Readable.fromWeb(response.body as never), restart: offset > 0 }
+    cancel()
+    throw new TransferError('source_missing', `${part.name}: HTTP ${response.status}`)
   }
 }
 
