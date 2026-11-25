@@ -44,6 +44,12 @@ export interface TmdbMovieResult {
   vote_average: number
 }
 
+export interface TmdbPage<T> {
+  page: number
+  total_pages: number
+  results: T[]
+}
+
 export interface TmdbSearch<T> {
   page: number
   total_results: number
@@ -147,6 +153,20 @@ export class TmdbClient {
 
   movieDetails(tmdbId: number): Promise<TmdbMovieDetails> {
     return this.get(`/movie/${tmdbId}`)
+  }
+
+  /** /trending/{kind}/week */
+  trending(kind: 'tv' | 'movie', page: number): Promise<TmdbPage<TmdbTvResult | TmdbMovieResult>> {
+    return this.get(`/trending/${kind}/week`, { page })
+  }
+
+  /** /discover/{kind} by popularity, optionally within one genre. */
+  discover(kind: 'tv' | 'movie', page: number, genreId?: number): Promise<TmdbPage<TmdbTvResult | TmdbMovieResult>> {
+    return this.get(`/discover/${kind}`, { page, sort_by: 'popularity.desc', include_adult: 'false', ...(genreId ? { with_genres: genreId } : {}) })
+  }
+
+  genres(kind: 'tv' | 'movie'): Promise<{ genres: { id: number; name: string }[] }> {
+    return this.get(`/genre/${kind}/list`)
   }
 }
 

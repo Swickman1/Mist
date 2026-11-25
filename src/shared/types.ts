@@ -80,6 +80,18 @@ export interface SteamHit {
 
 export type SteamSearchResult = { ok: true; hits: SteamHit[] } | { ok: false; error: string }
 
+/** Browse rows on the Shows tab: TMDB's weekly trending list, or discover by popularity. */
+export type TmdbDiscoverMode = 'trending' | 'popular'
+
+export type TmdbDiscoverResult = { ok: true; hits: TmdbHit[]; page: number; totalPages: number } | { ok: false; error: string }
+
+export interface TmdbGenre {
+  id: number
+  name: string
+}
+
+export type TmdbGenresResult = { ok: true; genres: TmdbGenre[] } | { ok: false; error: string }
+
 export interface Show {
   id: string
   title: string
@@ -273,6 +285,11 @@ export interface MistCalls {
   /** Checks the TMDB key in settings against the API. */
   tmdbTest(): Promise<ActionResult>
   tmdbSearch(kind: TmdbKind, query: string): Promise<TmdbSearchResult>
+  /** One page (20) of a browse row; genreId applies to 'popular' (TMDB's trending list has no genre filter). */
+  tmdbDiscover(kind: TmdbKind, mode: TmdbDiscoverMode, page: number, genreId?: number): Promise<TmdbDiscoverResult>
+  tmdbGenres(kind: TmdbKind): Promise<TmdbGenresResult>
+  /** Imports a browsed title's metadata (show + episodes) into the catalog without adding it to the library. */
+  importTmdbTitle(kind: TmdbKind, tmdbId: number): Promise<ActionResult & { showId?: string }>
   /** Creates (or updates) the show/movie from TMDB with its seasons and episodes, then adds it to the library. */
   addShowFromTmdb(kind: TmdbKind, tmdbId: number, path?: string): Promise<ActionResult>
   /** Re-fetches a TMDB-imported title: updates metadata, never filePath, positionSec or library rows. */
@@ -322,6 +339,9 @@ export const MIST_METHODS = [
   'playerKey',
   'tmdbTest',
   'tmdbSearch',
+  'tmdbDiscover',
+  'tmdbGenres',
+  'importTmdbTitle',
   'addShowFromTmdb',
   'refreshMetadata',
   'steamSearch',
@@ -336,7 +356,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'steamSearch', 'suggestedDownloadHosts']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'tmdbDiscover', 'tmdbGenres', 'steamSearch', 'suggestedDownloadHosts']
 
 export const IPC = {
   call: 'mist:call',

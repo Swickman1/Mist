@@ -11,6 +11,9 @@ import type {
   Snapshot,
   SourceShape,
   SteamSearchResult,
+  TmdbDiscoverMode,
+  TmdbDiscoverResult,
+  TmdbGenresResult,
   TmdbKind,
   TmdbSearchResult
 } from '../shared/types'
@@ -256,6 +259,38 @@ export class MistService implements MistCalls {
 
   playerKey(key: string): void {
     this.mpv.key(key)
+  }
+
+  async tmdbDiscover(kind: TmdbKind, mode: TmdbDiscoverMode, page: number, genreId?: number): Promise<TmdbDiscoverResult> {
+    try {
+      const result = mode === 'trending' ? await this.tmdb.trending(kind, page) : await this.tmdb.discover(kind, page, genreId)
+      return {
+        ok: true,
+        hits: result.results.slice(0, METADATA_CONFIG.browseRowLimit).map((item) => toHit(kind, item)),
+        page: result.page,
+        totalPages: result.total_pages
+      }
+    } catch (error) {
+      return { ok: false, error: (error as Error).message }
+    }
+  }
+
+  async tmdbGenres(kind: TmdbKind): Promise<TmdbGenresResult> {
+    try {
+      return { ok: true, genres: (await this.tmdb.genres(kind)).genres }
+    } catch (error) {
+      return { ok: false, error: (error as Error).message }
+    }
+  }
+
+  async importTmdbTitle(kind: TmdbKind, tmdbId: number): Promise<ActionResult & { showId?: string }> {
+    try {
+      const { show, created } = await importTitle(this.tmdb, this.repo, this.tmdbCache, kind, tmdbId, this.art)
+      void this.tmdbCache.prefetch(artUrlsOf(this.repo, show.id))
+      return { ok: true, message: `${show.title} ${kind === 'movie' ? 'movie' : `· ${created} episodes`} imported`, showId: show.id }
+    } catch (error) {
+      return { ok: false, message: (error as Error).message }
+    }
   }
 
   async tmdbSearch(kind: TmdbKind, query: string): Promise<TmdbSearchResult> {

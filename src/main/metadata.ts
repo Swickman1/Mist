@@ -14,6 +14,8 @@ export const METADATA_CONFIG = {
   fallbackEpisodeMinutes: 45,
   fallbackMovieMinutes: 100,
   searchResultLimit: 12,
+  /** A browse row shows at most one TMDB page. */
+  browseRowLimit: 20,
   /** Season 0 is TMDB's "Specials"; it is skipped. */
   skipSpecials: true
 }

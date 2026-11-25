@@ -15,6 +15,7 @@ import { Library } from './pages/Library'
 import { Settings } from './pages/Settings'
 import { ShowPage } from './pages/ShowPage'
 import { Shows } from './pages/Shows'
+import { TmdbTitle } from './pages/TmdbTitle'
 import { visibleJobs } from './selectors'
 import { useMist } from './store'
 
@@ -42,6 +43,7 @@ export function App() {
               <Route path="/games" element={<Games />} />
               <Route path="/games/:id" element={<GamePage />} />
               <Route path="/shows" element={<Shows />} />
+              <Route path="/shows/tmdb/:kind/:tmdbId" element={<TmdbTitle />} />
               <Route path="/shows/:id" element={<ShowPage />} />
               <Route path="/downloads" element={<Downloads />} />
               <Route path="/settings" element={<Settings />} />
