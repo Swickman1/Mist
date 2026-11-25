@@ -244,7 +244,10 @@ export interface MistCalls {
   addShow(showId: string, path?: string): Promise<ActionResult>
   removeEntry(entryId: string): void
   clearLibrary(): void
-  restoreSeed(): void
+  /** Deletes all games, shows, episodes, library entries and jobs. Settings stay. */
+  clearCatalog(): void
+  /** Replaces the catalog with the built-in sample data. Settings stay. */
+  loadSampleData(): void
   play(entryId: string): ActionResult
   install(gameId: string): void
   setSource(gameId: string, input: string, shape: SourceShape): Promise<ActionResult>
@@ -294,7 +297,8 @@ export const MIST_METHODS = [
   'addShow',
   'removeEntry',
   'clearLibrary',
-  'restoreSeed',
+  'clearCatalog',
+  'loadSampleData',
   'play',
   'install',
   'setSource',

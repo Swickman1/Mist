@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Game } from '../../../shared/types'
+import { EmptyState } from '../components/EmptyState'
 import { GameTile, StateChip } from '../components/GameTile'
 import { Icon } from '../components/Icon'
 import { ui } from '../config'
@@ -81,6 +82,19 @@ export function Games() {
       .filter((g) => filter === 'all' || (filter === 'owned') === owned(g))
       .sort(SORTS.find((s) => s.key === sort)!.compare)
   }, [snapshot, filter, sort, query])
+
+  if (snapshot.games.length === 0) {
+    return (
+      <div className="page">
+        <EmptyState
+          icon="games"
+          title="Nothing here yet"
+          body="Find a game on the Steam store to add its details, then point it at your own files."
+          actions={[{ label: 'Search Steam', primary: true, onClick: () => openAddFlow('game') }]}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="page">

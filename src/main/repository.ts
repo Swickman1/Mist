@@ -72,7 +72,8 @@ export class Repository {
     this.jobs = new DocTable(this.db, 'jobs')
     this.watchlist = new DocTable(this.db, 'watchlist')
     this.settingsTable = new DocTable(this.db, 'settings')
-    if (this.games.all().length === 0) this.seed()
+    // A fresh install starts empty: only default settings. Sample data is opt-in (loadSampleData).
+    if (!this.settingsTable.get('settings')) this.settings = defaultSettings(this.homeDir)
     this.migrateTheme()
     this.migrateSourceShapes()
     this.migratePaths()
@@ -129,10 +130,17 @@ export class Repository {
     this.db.transaction(work)()
   }
 
-  /** Wipes every table and writes fresh seed rows. */
-  seed(): void {
+  /** Deletes every catalog row (games, shows, episodes, library, jobs, watchlist). Settings stay. */
+  clearCatalog(): void {
     this.transaction(() => {
-      for (const table of [this.games, this.shows, this.episodes, this.library, this.jobs, this.watchlist, this.settingsTable]) table.clear()
+      for (const table of [this.games, this.shows, this.episodes, this.library, this.jobs, this.watchlist]) table.clear()
+    })
+  }
+
+  /** Replaces the catalog with the sample rows from seed.ts. Settings stay. */
+  loadSampleData(): void {
+    this.transaction(() => {
+      this.clearCatalog()
       const data = buildSeed(Date.now())
       data.games.forEach((row) => this.games.put(row))
       data.shows.forEach((row) => this.shows.put(row))
@@ -140,7 +148,6 @@ export class Repository {
       data.library.forEach((row) => this.library.put(row))
       data.jobs.forEach((row) => this.jobs.put(row))
       this.watchlist.put({ id: 's-copper-coast' })
-      this.settings = defaultSettings(this.homeDir)
     })
   }
 }

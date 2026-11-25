@@ -1,4 +1,5 @@
 import { PosterTile } from '../components/Cards'
+import { EmptyState } from '../components/EmptyState'
 import { Icon } from '../components/Icon'
 import { entryFor } from '../selectors'
 import { useMist } from '../store'
@@ -14,11 +15,20 @@ export function Shows() {
           <Icon name="plus" /> Add show
         </button>
       </header>
-      <div className="grid grid--dense">
-        {snapshot.shows.map((show) => (
-          <PosterTile key={show.id} show={show} owned={entryFor(snapshot, 'show', show.id) !== undefined} />
-        ))}
-      </div>
+      {snapshot.shows.length === 0 ? (
+        <EmptyState
+          icon="shows"
+          title="Nothing here yet"
+          body="Browse what is trending on TMDB, or add a show or movie you have on disk."
+          actions={[{ label: 'Browse trending', primary: true, onClick: () => openAddFlow('show') }]}
+        />
+      ) : (
+        <div className="grid grid--dense">
+          {snapshot.shows.map((show) => (
+            <PosterTile key={show.id} show={show} owned={entryFor(snapshot, 'show', show.id) !== undefined} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

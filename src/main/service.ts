@@ -105,8 +105,15 @@ export class MistService implements MistCalls {
     })
   }
 
-  restoreSeed(): void {
-    this.repo.seed()
+  clearCatalog(): void {
+    // Stop running pipelines first so none of them writes into a cleared catalog.
+    this.runner.cancelAll()
+    this.repo.clearCatalog()
+  }
+
+  loadSampleData(): void {
+    this.runner.cancelAll()
+    this.repo.loadSampleData()
   }
 
   play(entryId: string): ActionResult {

@@ -260,9 +260,22 @@ export function Settings() {
             Clear library
           </button>
         </Row>
-        <Row label="Restore sample data" hint="Re-seeds the database with the fake catalog">
-          <button className="btn btn--ghost" onClick={() => api.restoreSeed()}>
-            Restore
+        <Row label="Clear catalog" hint="Deletes every game, show, episode, library entry and download. Settings and cached artwork stay.">
+          <button
+            className="btn btn--ghost"
+            onClick={() => {
+              if (window.confirm('Clear the whole catalog? Every game, show, episode, library entry and download is deleted. This cannot be undone.')) {
+                void api.clearCatalog()
+                notify('Catalog cleared')
+              }
+            }}
+          >
+            Clear catalog
+          </button>
+        </Row>
+        <Row label="Load sample data" hint="Replaces the catalog with the built-in sample games and shows">
+          <button className="btn btn--ghost" onClick={() => api.loadSampleData()}>
+            Load sample data
           </button>
         </Row>
       </section>
