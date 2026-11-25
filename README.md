@@ -64,6 +64,7 @@ The player uses **mpv** for every file it can open: HEVC, AV1, AC-3, DTS and so 
   vendor/mpv/LICENSE              (mpv's Copyright + LICENSE.GPL from github.com/mpv-player/mpv)
   ```
   `extraResources` copies them to `resources/mpv/`, which Mist checks first.
+  `LICENSE` and `SOURCE.md` (pointers to the corresponding GPL source) are committed. `mpv.exe` is not, because at 124.8 MB it is over GitHub's 100 MB file limit. `npm run dist` checks for it first and stops with the winget-and-copy instructions if it is missing.
 - **A specific build:** set `MIST_MPV_PATH` to its `mpv.exe`. When set, it is the only path Mist checks.
 
 Without mpv the player shows a one-time banner ("mpv is not installed …") that you can dismiss; the choice is saved in settings.
