@@ -7,7 +7,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
-import { app, BaseWindow, type BrowserWindow } from 'electron'
+import { app, BaseWindow, screen, type BrowserWindow } from 'electron'
 import type { PlayerBounds, PlayerEvent, PlayerOpenRequest, PlayerOpenResult } from '../shared/types'
 
 export const MPV_CONFIG = {
@@ -88,6 +88,8 @@ class Session {
     request: PlayerOpenRequest,
     hardwareDecode: boolean,
     private readonly emit: (event: PlayerEvent) => void,
+    /** script-message names from mpv (mist-close, mist-fullscreen), routed to the host. */
+    private readonly onScriptMessage: (name: string) => void,
     sessionId: number
   ) {
     this.window = new BaseWindow({
@@ -98,7 +100,6 @@ class Session {
       movable: false,
       minimizable: false,
       maximizable: false,
-      fullscreenable: false,
       skipTaskbar: true,
       hasShadow: false,
       roundedCorners: false,
@@ -188,7 +189,8 @@ class Session {
       // bindings serve anyone who clicked into the mpv window. SPACE keeps mpv's default.
       ['keybind', 'RIGHT', `seek ${step}`],
       ['keybind', 'LEFT', `seek -${step}`],
-      ['keybind', 'ESC', 'script-message mist-close']
+      ['keybind', 'ESC', 'script-message mist-close'],
+      ['keybind', 'f', 'script-message mist-fullscreen']
     ]) {
       this.send(command)
     }
@@ -203,8 +205,8 @@ class Session {
     if (message.event === 'file-loaded') {
       this.window.showInactive()
       onLoaded(true)
-    } else if (message.event === 'client-message' && message.args?.[0] === 'mist-close') {
-      this.emit({ type: 'close-request' })
+    } else if (message.event === 'client-message' && message.args?.[0]) {
+      this.onScriptMessage(message.args[0])
     } else if (message.event === 'property-change') {
       this.onProperty(message.name!, message.data)
     }
@@ -230,6 +232,20 @@ class Session {
   private emitTime(): void {
     this.lastTimeEvent = this.position
     this.emit({ type: 'time', position: this.position, duration: this.duration, paused: this.paused })
+  }
+
+  /** Covers the whole display the player is on (the app window stays behind). */
+  enterFullscreen(): void {
+    const display = screen.getDisplayMatching(this.window.getBounds())
+    this.window.setAlwaysOnTop(true, 'screen-saver')
+    this.window.setBounds(display.bounds)
+    this.send(['set', 'fullscreen', 'yes'])
+  }
+
+  exitFullscreen(bounds: PlayerBounds): void {
+    this.send(['set', 'fullscreen', 'no'])
+    this.window.setAlwaysOnTop(false)
+    this.setBounds(bounds)
   }
 
   /** Presses a key inside mpv without giving its window focus. */
@@ -268,7 +284,15 @@ export class MpvHost {
   /** Bumped by every open/close so a superseded open stops instead of starting a session. */
   private generation = 0
   private bounds?: PlayerBounds
-  private readonly follow = () => this.bounds && this.session?.setBounds(this.bounds)
+  /** While set, the tracked player rect is recorded but not applied. */
+  private fullscreen = false
+  private readonly follow = () => !this.fullscreen && this.bounds && this.session?.setBounds(this.bounds)
+  private readonly onScriptMessage = (name: string) => {
+    if (name === 'mist-fullscreen') this.toggleFullscreen()
+    // Esc leaves fullscreen first; otherwise it asks the renderer to close the player.
+    else if (name === 'mist-close' && this.fullscreen) this.toggleFullscreen()
+    else if (name === 'mist-close') this.emit({ type: 'close-request' })
+  }
 
   constructor(
     private readonly host: () => BrowserWindow | undefined,
@@ -289,7 +313,7 @@ export class MpvHost {
     const attempts = this.hardwareDecode() ? [true, false] : [false]
     let reason = ''
     for (const hardware of attempts) {
-      const session = new Session(mpvPath, win, request, hardware, this.emit, ++this.sessionCount)
+      const session = new Session(mpvPath, win, request, hardware, this.emit, this.onScriptMessage, ++this.sessionCount)
       this.session = session
       const ok = await Promise.race([session.loaded, sleep(MPV_CONFIG.loadTimeoutMs).then(() => false)])
       if (generation !== this.generation) {
@@ -310,7 +334,15 @@ export class MpvHost {
 
   setBounds(bounds: PlayerBounds): void {
     this.bounds = bounds
-    this.session?.setBounds(bounds)
+    if (!this.fullscreen) this.session?.setBounds(bounds)
+  }
+
+  toggleFullscreen(): void {
+    const session = this.session
+    if (!session || !this.bounds) return
+    this.fullscreen = !this.fullscreen
+    if (this.fullscreen) session.enterFullscreen()
+    else session.exitFullscreen(this.bounds)
   }
 
   key(key: string): void {
@@ -322,6 +354,7 @@ export class MpvHost {
     const session = this.session
     if (!session) return null
     this.session = undefined
+    this.fullscreen = false
     const win = this.host()
     win?.off('move', this.follow)
     win?.off('resize', this.follow)
