@@ -432,13 +432,13 @@ export class MistService implements MistCalls {
     const games = this.repo.games.all()
     const bySource = new Map(games.map((game) => [game.source, game] as const).filter((row): row is [string, (typeof games)[number]] => row[0] !== undefined))
     const listedByFile = new Map(files.map((file) => [file.file, new Set(file.items.map((item) => item.pageUrl))] as const))
-    const merged = new Map<string, { title: string; files: Set<string> }>()
+    const merged = new Map<string, { title: string; sizeBytes: number; files: Set<string> }>()
 
     for (const file of files) {
       for (const item of file.items) {
         const current = merged.get(item.pageUrl)
         if (current) current.files.add(file.file)
-        else merged.set(item.pageUrl, { title: item.title, files: new Set([file.file]) })
+        else merged.set(item.pageUrl, { title: item.title, sizeBytes: item.sizeBytes, files: new Set([file.file]) })
       }
     }
 
@@ -453,7 +453,7 @@ export class MistService implements MistCalls {
           art: makeArt(id, { width: 600, height: 900, label: item.title }),
           hero: makeArt(`${id}-hero`, { width: 2100, height: 900 }),
           version: '—',
-          sizeBytes: 0,
+          sizeBytes: item.sizeBytes,
           description: indexDescription(item.title),
           source: pageUrl,
           shape: 'archive',
@@ -468,8 +468,9 @@ export class MistService implements MistCalls {
       this.repo.games.put({
         ...existing,
         title: item.title,
+        sizeBytes: item.sizeBytes,
         description: existing.description || indexDescription(item.title),
-        origin: 'index',
+        origin: existing.origin ?? 'index',
         indexFiles,
         addedAt: existing.addedAt || now
       })
