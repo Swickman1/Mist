@@ -136,6 +136,105 @@ interface ManifestEntry {
   sha256?: string
 }
 
+interface GithubReleaseAsset {
+  name: string
+  browser_download_url: string
+  size: number
+}
+
+interface GithubRelease {
+  assets: GithubReleaseAsset[]
+}
+
+interface GithubReleaseRef {
+  owner: string
+  repo: string
+  apiPath: string
+}
+
+const GITHUB_API_TIMEOUT_MS = 20_000
+
+function githubReleaseRef(input: URL): GithubReleaseRef | undefined {
+  if (input.hostname.toLowerCase().replace(/\.$/, '') !== 'github.com') return undefined
+  const parts = input.pathname.split('/').filter(Boolean)
+  if (parts.length < 3 || parts[2] !== 'releases') return undefined
+  const owner = parts[0]
+  const repo = parts[1]
+  if (!owner || !repo) return undefined
+  if (parts.length === 3 || (parts.length === 4 && parts[3] === 'latest')) return { owner, repo, apiPath: 'releases/latest' }
+  if (parts.length === 5 && parts[3] === 'tag') return { owner, repo, apiPath: `releases/tags/${encodeURIComponent(decodeURIComponent(parts[4]))}` }
+  return undefined
+}
+
+function withGithubApiHost(http: HttpContext): HttpContext {
+  // GitHub release pages and api.github.com are the same publisher, so the API
+  // host is allowed for this resolver flow even when the settings list only has
+  // github.com.
+  return { ...http, hosts: () => [...new Set([...http.hosts(), 'api.github.com'])] }
+}
+
+function isGithubRateLimit(response: Response, body: string): boolean {
+  if (response.status !== 403) return false
+  if ((response.headers.get('x-ratelimit-remaining') ?? '') === '0') return true
+  return /rate limit/i.test(body)
+}
+
+async function fetchGithubRelease(url: URL, http: HttpContext): Promise<GithubRelease | undefined> {
+  const release = githubReleaseRef(url)
+  if (!release) return undefined
+  const apiUrl = `https://api.github.com/repos/${release.owner}/${release.repo}/${release.apiPath}`
+  const { response, url: finalUrl } = await httpFetch(
+    apiUrl,
+    {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS)
+    },
+    withGithubApiHost(http)
+  )
+  const body = await response.text()
+  if (isGithubRateLimit(response, body)) throw new Error('blocked: GitHub API rate limit exceeded; retry in a minute')
+  if (!response.ok) throw new Error(`${new URL(finalUrl).hostname} answered HTTP ${response.status} for ${apiUrl}`)
+  const parsed = JSON.parse(body) as Partial<GithubRelease>
+  if (!Array.isArray(parsed.assets)) throw new Error('GitHub release API response is missing assets')
+  return { assets: parsed.assets }
+}
+
+async function githubReleaseParts(url: URL, http: HttpContext): Promise<Part[] | undefined> {
+  const release = await fetchGithubRelease(url, http)
+  if (!release) return undefined
+
+  const sums = new Map<string, string>()
+  const parts: Part[] = []
+  for (const asset of release.assets) {
+    if (typeof asset.name !== 'string' || typeof asset.browser_download_url !== 'string' || typeof asset.size !== 'number') continue
+    if (asset.name.toLowerCase().endsWith('.sig')) continue
+    if (asset.name.toLowerCase().includes('checksum')) {
+      try {
+        checkHost(asset.browser_download_url, http.hosts())
+        parseChecksums(asset.name, (await fetchText(asset.browser_download_url, http, url.href)).text, sums)
+      } catch {
+        // A checksum asset that cannot be read only means no published hash.
+      }
+      continue
+    }
+    if (!ARCHIVE_PATTERN.test(asset.name) || !(asset.size > 0)) continue
+    checkHost(asset.browser_download_url, http.hosts())
+    parts.push({
+      name: asset.name,
+      sizeBytes: Math.floor(asset.size),
+      url: asset.browser_download_url,
+      index: parts.length
+    })
+  }
+
+  for (const part of parts) {
+    const sha256 = sums.get(part.name.toLowerCase())
+    if (sha256) part.sha256 = sha256
+  }
+  if (parts.length === 0) throw new Error('no parts found at this URL')
+  return parts
+}
+
 async function fetchText(url: string, http: HttpContext, referer?: string): Promise<{ text: string; url: string; type: string }> {
   const { response, url: finalUrl } = await httpFetch(url, { referer }, http)
   if (!response.ok) throw new Error(`${new URL(finalUrl).hostname} answered HTTP ${response.status} for ${url}`)
@@ -171,7 +270,11 @@ function manifestParts(json: unknown, base: string, http: HttpContext): Part[] {
 /** Archive anchors on a page (or a manifest JSON) -> URL parts, in volume order, with sidecar sha256s. */
 export async function resolveUrl(input: string, http: HttpContext | undefined): Promise<Part[]> {
   if (!http) throw new Error('URL sources need the download settings (internal: no HTTP context)')
-  const page = await fetchText(input.trim(), http)
+  const source = new URL(input.trim())
+  const githubParts = await githubReleaseParts(source, http)
+  if (githubParts) return githubParts
+
+  const page = await fetchText(source.href, http)
   if (/\.json$/i.test(new URL(page.url).pathname) || /json/i.test(page.type)) {
     const parts = manifestParts(JSON.parse(page.text), page.url, http)
     if (parts.length === 0) throw new Error('no parts found at this URL')

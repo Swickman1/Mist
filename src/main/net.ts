@@ -7,6 +7,7 @@ export { hostAllowed } from '../shared/hosts'
 /** Offered by Settings → "Add suggested hosts": freely downloadable, official sources. */
 export const SUGGESTED_DOWNLOAD_HOSTS = [
   'github.com',
+  'api.github.com',
   'objects.githubusercontent.com',
   'release-assets.githubusercontent.com',
   'archive.org'
@@ -65,6 +66,8 @@ export interface HttpContext {
 
 export interface HttpRequest {
   method?: 'GET' | 'HEAD'
+  /** Extra request headers, e.g. Accept for JSON APIs. */
+  headers?: Record<string, string>
   /** Byte offset for a Range request. */
   rangeFrom?: number
   /** A closed range, e.g. 0-0 to probe a size. */
@@ -81,7 +84,7 @@ export async function httpFetch(url: string, request: HttpRequest, context: Http
   let current = url
   for (let hop = 0; hop <= NET_CONFIG.maxRedirects; hop++) {
     checkHost(current, context.hosts())
-    const headers: Record<string, string> = { 'User-Agent': context.userAgent }
+    const headers: Record<string, string> = { 'User-Agent': context.userAgent, ...request.headers }
     if (request.referer) headers['Referer'] = request.referer
     if (request.rangeFrom !== undefined) headers['Range'] = `bytes=${request.rangeFrom}-${request.rangeTo ?? ''}`
     const response = await fetch(current, {
