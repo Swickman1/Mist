@@ -18,8 +18,8 @@ let mainWindow: BrowserWindow | undefined
 /** Local protocols Mist always serves from disk or memory. */
 const LOCAL_PROTOCOLS = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:', `${MEDIA_SCHEME}:`]
 
-/** The only remote hosts Mist may reach, over https, for title metadata and artwork. */
-export const ALLOWED_HTTPS_HOSTS = ['image.tmdb.org', 'api.themoviedb.org']
+/** The only remote hosts Mist may reach, over https, for title metadata and artwork (TMDB, Steam store). */
+export const ALLOWED_HTTPS_HOSTS = ['image.tmdb.org', 'api.themoviedb.org', 'store.steampowered.com', 'shared.akamai.steamstatic.com']
 
 /** Everything outside the local protocols, the dev server and the allowlist is cancelled and logged. */
 function blockNetwork(): void {
