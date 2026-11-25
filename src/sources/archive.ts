@@ -172,6 +172,8 @@ interface GithubReleaseRef {
 const GITHUB_API_TIMEOUT_MS = 20_000
 /** Most parts one release may contribute; rolling tags (Veloren nightly) pile up hundreds of builds. */
 const MAX_RELEASE_PARTS = 20
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
 
 function githubReleaseRef(input: URL): GithubReleaseRef | undefined {
   if (input.hostname.toLowerCase().replace(/\.$/, '') !== 'github.com') return undefined
@@ -271,9 +273,31 @@ async function githubReleaseParts(url: URL, http: HttpContext): Promise<Part[] |
   return parts
 }
 
-async function fetchText(url: string, http: HttpContext, referer?: string): Promise<{ text: string; url: string; type: string }> {
-  const { response, url: finalUrl } = await httpFetch(url, { referer }, http)
-  if (!response.ok) throw new Error(`${new URL(finalUrl).hostname} answered HTTP ${response.status} for ${url}`)
+async function fetchText(
+  url: string,
+  http: HttpContext,
+  referer?: string,
+  mode: 'default' | 'html-page' = 'default'
+): Promise<{ text: string; url: string; type: string }> {
+  const request =
+    mode === 'html-page'
+      ? {
+          referer,
+          headers: {
+            'User-Agent': BROWSER_UA,
+            Accept: 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        }
+      : { referer }
+  const { response, url: finalUrl } = await httpFetch(url, request, http)
+  if (!response.ok) {
+    const host = new URL(finalUrl).hostname
+    if (mode === 'html-page' && [403, 429].includes(response.status)) {
+      throw new Error(`blocked: ${host} wants a browser check (HTTP ${response.status})`)
+    }
+    throw new Error(`${host} answered HTTP ${response.status} for ${url}`)
+  }
   return { text: await response.text(), url: finalUrl, type: response.headers.get('content-type') ?? '' }
 }
 
@@ -310,7 +334,7 @@ export async function resolveUrl(input: string, http: HttpContext | undefined): 
   const githubParts = await githubReleaseParts(source, http)
   if (githubParts) return githubParts
 
-  const page = await fetchText(source.href, http)
+  const page = await fetchText(source.href, http, undefined, /\.json$/i.test(source.pathname) ? 'default' : 'html-page')
   if (/\.json$/i.test(new URL(page.url).pathname) || /json/i.test(page.type)) {
     const parts = manifestParts(JSON.parse(page.text), page.url, http)
     if (parts.length === 0) throw new Error('no parts found at this URL')
