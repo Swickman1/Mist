@@ -35,7 +35,11 @@ export function MpvPlayer({
   onPosition,
   onClose,
   onUnavailable
-}: PlayerProps & { filePath: string; onUnavailable(reason: string, showMissingBanner?: boolean): void }) {
+}: PlayerProps & {
+  filePath: string
+  /** positionSec: where mpv was when it failed mid-playback. */
+  onUnavailable(reason: string, showMissingBanner?: boolean, positionSec?: number): void
+}) {
   const screen = useRef<HTMLDivElement>(null)
   const report = useRef(onPosition)
   report.current = onPosition
@@ -51,6 +55,8 @@ export function MpvPlayer({
     let playing = false
     let lastWrite = startAtSec
     let paused = false
+    /** Last position from mpv's 1s time events (writes only happen every 10s). */
+    let lastKnown = startAtSec
 
     const write = (position: number) => {
       lastWrite = position
@@ -59,6 +65,7 @@ export function MpvPlayer({
 
     const off = api.onPlayer((event) => {
       if (event.type === 'time') {
+        lastKnown = event.position
         const pauseChanged = event.paused !== paused
         paused = event.paused
         if (Math.abs(event.position - lastWrite) >= WRITE_EVERY_SEC || (pauseChanged && paused)) write(event.position)
@@ -69,8 +76,9 @@ export function MpvPlayer({
       } else if (event.type === 'close-request') {
         close.current?.()
       } else if (event.type === 'error') {
-        // mpv failed mid-playback: hand over to the <video> backend with mpv's reason.
-        onUnavailable(event.message)
+        // mpv failed mid-playback: save where it got to and hand over to <video> from there.
+        write(lastKnown)
+        onUnavailable(event.message, false, lastKnown)
       }
     })
 

@@ -155,6 +155,7 @@ class Session {
   /** end-file reason=error detail, when mpv reported one. */
   private fileError = ''
   private fileLoaded = false
+  private closing = false
   private position = 0
   private duration = 0
   private paused = false
@@ -224,9 +225,11 @@ class Session {
     this.process.stderr?.on('data', (chunk: Buffer) => (this.stderr = (this.stderr + chunk.toString()).slice(-2000)))
 
     this.loaded = new Promise<boolean>((resolve) => {
-      this.process.once('exit', () => {
+      this.process.once('exit', (code) => {
         this.exited = true
         resolve(false)
+        // Dying after the file loaded, without Mist asking it to quit, is a playback failure.
+        if (this.fileLoaded && !this.closing) this.emit({ type: 'error', message: `mpv stopped unexpectedly (exit code ${code === null ? 'unknown' : code | 0})` })
       })
       this.process.once('error', () => resolve(false))
       void this.attach(pipe, request.filePath, resolve)
@@ -375,6 +378,7 @@ class Session {
   }
 
   async close(): Promise<void> {
+    this.closing = true
     if (!this.exited) {
       this.send(['quit'])
       await Promise.race([new Promise((resolve) => this.process.once('exit', resolve)), sleep(MPV_CONFIG.quitTimeoutMs)])
