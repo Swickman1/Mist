@@ -136,6 +136,21 @@ interface ManifestEntry {
   sha256?: string
 }
 
+/** Release assets built for another OS, or source code: never a Windows install. */
+const OTHER_PLATFORM = /(^|[-_.s])(macw*|osx|darwin|linux|android|freebsd|source|src)([-_.s]|$)/i
+/** Windows builds, best first: 64-bit, then 32-bit, then any Windows build. */
+const WINDOWS_BUILDS = [/win(dows)?[-_.]?(64|x64|x86_64|amd64)/i, /win(dows)?[-_.]?(32|x86|i686)/i, /win(dows)?/i]
+
+/** One release ships a build per platform; keep the best Windows build, or every asset when none names a platform. */
+function windowsBuild<T extends { name: string }>(assets: T[]): T[] {
+  const candidates = assets.filter((asset) => !OTHER_PLATFORM.test(asset.name))
+  for (const pattern of WINDOWS_BUILDS) {
+    const matched = candidates.filter((asset) => pattern.test(asset.name))
+    if (matched.length > 0) return matched
+  }
+  return candidates
+}
+
 interface GithubReleaseAsset {
   name: string
   browser_download_url: string
@@ -204,6 +219,7 @@ async function githubReleaseParts(url: URL, http: HttpContext): Promise<Part[] |
   if (!release) return undefined
 
   const sums = new Map<string, string>()
+  const archives: GithubReleaseAsset[] = []
   const parts: Part[] = []
   for (const asset of release.assets) {
     if (typeof asset.name !== 'string' || typeof asset.browser_download_url !== 'string' || typeof asset.size !== 'number') continue
@@ -218,6 +234,9 @@ async function githubReleaseParts(url: URL, http: HttpContext): Promise<Part[] |
       continue
     }
     if (!ARCHIVE_PATTERN.test(asset.name) || !(asset.size > 0)) continue
+    archives.push(asset)
+  }
+  for (const asset of windowsBuild(archives)) {
     checkHost(asset.browser_download_url, http.hosts())
     parts.push({
       name: asset.name,

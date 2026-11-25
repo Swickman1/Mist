@@ -1,10 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import type { DownloadJob, Game, LibraryEntry } from '../../../shared/types'
-import { formatPercent, tileState, type TileState } from '../selectors'
+import { formatPercent, tileState } from '../selectors'
 import { api, useMist } from '../store'
+import { useGameChip, type ChipState } from './gameChip'
 import { Icon } from './Icon'
-
-export type ChipState = TileState | 'blocked' | 'install'
 
 export function StateChip({
   state,
@@ -38,18 +37,17 @@ export function GameTile({
   entry,
   job,
   meta,
-  chip,
   className
 }: {
   game: Game
   entry?: LibraryEntry
   job?: DownloadJob
   meta?: string
-  chip?: { state: ChipState; label?: string; onClick?: (event: React.MouseEvent) => void; title?: string }
   className?: string
 }) {
   const navigate = useNavigate()
   const { notify } = useMist()
+  const chip = useGameChip(game, entry, job)
   const state = entry ? tileState(entry, job) : undefined
   const playable = state === 'ready' || state === 'update'
 
@@ -63,7 +61,7 @@ export function GameTile({
     <div className={`tile${state === 'missing' ? ' is-missing' : ''}${className ? ` ${className}` : ''}`}>
       <button className="tile__cover" onClick={() => navigate(`/games/${game.id}`)} aria-label={game.title}>
         <img src={game.art} alt="" draggable={false} />
-        {chip ? <StateChip state={chip.state} label={chip.label} onClick={chip.onClick} title={chip.title} /> : state && <StateChip state={state} job={job} />}
+        <StateChip state={chip.state} label={chip.label} onClick={chip.onClick} title={chip.title} />
         {state === 'downloading' && job && (
           <div className="tile__progress">
             <div className="progress__fill" style={{ width: `${job.progress * 100}%` }} />

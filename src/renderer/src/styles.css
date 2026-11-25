@@ -847,6 +847,7 @@ img {
   color: var(--accent-strong);
 }
 
+.chip--failed,
 .chip--blocked {
   color: var(--red);
   border-color: rgba(239, 91, 95, 0.4);

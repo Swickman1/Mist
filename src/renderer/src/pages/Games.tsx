@@ -2,14 +2,13 @@
 // with filter / sort controls.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { hostAllowed } from '../../../shared/hosts'
 import type { Game } from '../../../shared/types'
 import { EmptyState } from '../components/EmptyState'
-import { GameTile, StateChip, type ChipState } from '../components/GameTile'
+import { GameTile, StateChip } from '../components/GameTile'
 import { Icon } from '../components/Icon'
 import { ui } from '../config'
-import { entryFor, formatBytes, formatPercent, jobForGame, tileState } from '../selectors'
-import { api, useMist } from '../store'
+import { entryFor, formatBytes, jobForGame, tileState } from '../selectors'
+import { useMist } from '../store'
 
 const PAGE_SIZE = 60
 
@@ -27,15 +26,6 @@ const SORTS = [
 
 type FilterKey = (typeof FILTERS)[number]['key']
 type SortKey = (typeof SORTS)[number]['key']
-
-function hostFor(url: string | undefined): string | undefined {
-  if (!url) return undefined
-  try {
-    return new URL(url).hostname.toLowerCase()
-  } catch {
-    return undefined
-  }
-}
 
 function Spotlight({ games }: { games: Game[] }) {
   const { snapshot } = useMist()
@@ -79,7 +69,7 @@ function Spotlight({ games }: { games: Game[] }) {
 }
 
 export function Games() {
-  const { snapshot, openAddFlow, notify, confirm } = useMist()
+  const { snapshot, openAddFlow } = useMist()
   const [filter, setFilter] = useState<FilterKey>('all')
   const [sort, setSort] = useState<SortKey>('title')
   const [query, setQuery] = useState('')
@@ -108,55 +98,6 @@ export function Games() {
   }, [snapshot, filter, sort, query])
 
   const visibleGames = games.slice(0, limit)
-
-  async function allowHost(host: string): Promise<boolean> {
-    const allowed = await confirm({
-      title: 'Allow download host',
-      message: `Allow downloads from ${host}?`,
-      confirmLabel: 'Allow'
-    })
-    if (!allowed) return false
-    const hosts = new Set(snapshot.settings.downloadHosts)
-    hosts.add(host)
-    const result = await api.setDownloadHosts([...hosts].join('\n'))
-    notify(result)
-    return result.ok
-  }
-
-  function chipFor(game: Game): { state: ChipState; label: string; title?: string; onClick?: (event: React.MouseEvent) => void } | undefined {
-    const entry = entryFor(snapshot, 'game', game.id)
-    const job = jobForGame(snapshot.jobs, game.id)
-    if (entry) {
-      const state = tileState(entry, job)
-      return { state, label: state === 'downloading' && job ? `DOWNLOADING ${formatPercent(job.progress)}` : state.toUpperCase() }
-    }
-
-    if (game.origin === 'index') {
-      const host = hostFor(game.source)
-      const allowed = host ? hostAllowed(host, snapshot.settings.downloadHosts) : false
-      if (host && !allowed) {
-        // GitHub hosts in this first bundled file are already in SUGGESTED_DOWNLOAD_HOSTS;
-        // this chip exists for future files that list other hosts.
-        return {
-          state: 'blocked',
-          label: 'HOST BLOCKED',
-          title: `Allow ${host}`,
-          onClick: async (event) => {
-            event.stopPropagation()
-            await allowHost(host)
-          }
-        }
-      }
-    }
-    return {
-      state: 'install',
-      label: 'INSTALL',
-      onClick: (event) => {
-        event.stopPropagation()
-        api.install(game.id)
-      }
-    }
-  }
 
   if (snapshot.games.length === 0) {
     return (
@@ -212,7 +153,6 @@ export function Games() {
                   game={game}
                   entry={entryFor(snapshot, 'game', game.id)}
                   job={jobForGame(snapshot.jobs, game.id)}
-                  chip={chipFor(game)}
                   className={!entryFor(snapshot, 'game', game.id) && game.origin === 'index' ? 'is-unowned' : undefined}
                   meta={[game.sizeBytes > 0 ? formatBytes(game.sizeBytes) : undefined, game.version !== '—' ? `v${game.version}` : undefined].filter(Boolean).join(' · ')}
                 />
