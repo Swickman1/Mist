@@ -9,6 +9,7 @@ import { launchGame } from './install'
 import { indexShow } from './media'
 import type { MpvHost } from './mpv'
 import { backupSaves } from './saves'
+import { TmdbClient } from './tmdb'
 import { JobRunner } from './jobRunner'
 import type { Repository } from './repository'
 
@@ -16,6 +17,8 @@ import type { Repository } from './repository'
 const MIN_PLAYTIME_RUN_SEC = 10
 
 export class MistService implements MistCalls {
+  private readonly tmdb = new TmdbClient(() => ({ key: this.repo.settings.tmdbKey, language: this.repo.settings.tmdbLanguage }))
+
   constructor(
     private readonly repo: Repository,
     private readonly runner: JobRunner,
@@ -219,6 +222,15 @@ export class MistService implements MistCalls {
 
   playerKey(key: string): void {
     this.mpv.key(key)
+  }
+
+  async tmdbTest(): Promise<ActionResult> {
+    try {
+      await this.tmdb.testKey()
+      return { ok: true, message: 'TMDB key is valid' }
+    } catch (error) {
+      return { ok: false, message: (error as Error).message }
+    }
   }
 
   async pickFolder(): Promise<string | null> {

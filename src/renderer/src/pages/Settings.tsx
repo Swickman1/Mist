@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { THEMES, type Settings as SettingsShape, type Theme } from '../../../shared/types'
+import { useState, type ReactNode } from 'react'
+import { THEMES, type ActionResult, type Settings as SettingsShape, type Theme } from '../../../shared/types'
 import { formatBytes } from '../selectors'
 import { api, useMist } from '../store'
 
@@ -45,6 +45,7 @@ function PathRow({ label, hint, field, settings }: { label: string; hint: string
 
 export function Settings() {
   const { snapshot, notify } = useMist()
+  const [tmdbStatus, setTmdbStatus] = useState<ActionResult | null>(null)
   const { settings } = snapshot
   const exclusionCommand = [settings.libraryPath, settings.stagingPath].map((p) => `Add-MpPreference -ExclusionPath "${p}"`).join('\n')
 
@@ -134,6 +135,50 @@ export function Settings() {
             <span className="toggle__box" />
             {snapshot.startup.enabled ? 'On' : 'Off'}
           </label>
+        </Row>
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section__title">Metadata</h2>
+        <Row label="TMDB API key" hint="Posters, overviews and episode lists for shows and movies. Get one free at themoviedb.org → Settings → API.">
+          <input
+            key={`key-${settings.tmdbKey}`}
+            className="field"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="API key or read access token"
+            defaultValue={settings.tmdbKey}
+            aria-label="TMDB API key"
+            onBlur={(e) => e.target.value.trim() !== settings.tmdbKey && api.updateSettings({ tmdbKey: e.target.value.trim() })}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          />
+          <button
+            className="btn btn--ghost"
+            onClick={async () => {
+              ;(document.activeElement as HTMLElement | null)?.blur()
+              setTmdbStatus({ ok: true, message: 'Testing…' })
+              setTmdbStatus(await api.tmdbTest())
+            }}
+          >
+            Test
+          </button>
+          {tmdbStatus && (
+            <span className={tmdbStatus.ok ? 'muted' : 'text-amber'} role="status" style={{ fontSize: 12 }}>
+              {tmdbStatus.ok ? (tmdbStatus.message === 'Testing…' ? 'Testing…' : 'Valid') : `Invalid: ${tmdbStatus.message}`}
+            </span>
+          )}
+        </Row>
+        <Row label="Language" hint="TMDB language for titles and overviews, e.g. en-US, de-DE">
+          <input
+            key={`lang-${settings.tmdbLanguage}`}
+            className="field"
+            style={{ maxWidth: 120 }}
+            defaultValue={settings.tmdbLanguage}
+            aria-label="TMDB language"
+            onBlur={(e) => e.target.value.trim() !== settings.tmdbLanguage && api.updateSettings({ tmdbLanguage: e.target.value.trim() || 'en-US' })}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          />
         </Row>
       </section>
 

@@ -132,6 +132,10 @@ export interface Settings {
   hardwareDecode: boolean
   /** The player's 'mpv is not installed' banner was dismissed. */
   mpvBannerDismissed: boolean
+  /** TMDB API key (v3 key or v4 read token), entered in Settings; empty = metadata off. */
+  tmdbKey: string
+  /** TMDB language tag, e.g. en-US. */
+  tmdbLanguage: string
 }
 
 /** Launch-at-login is OS state; only a packaged install can register itself. */
@@ -221,6 +225,8 @@ export interface MistCalls {
   playerClose(): Promise<number | null>
   /** Sends one mpv key name (SPACE, LEFT, RIGHT, f, ESC …) as `keypress`, so Mist keeps keyboard focus. */
   playerKey(key: string): void
+  /** Checks the TMDB key in settings against the API. */
+  tmdbTest(): Promise<ActionResult>
   setLaunchAtLogin(enabled: boolean): void
 }
 
@@ -253,7 +259,8 @@ export const MIST_METHODS = [
   'playerOpen',
   'playerBounds',
   'playerClose',
-  'playerKey'
+  'playerKey',
+  'tmdbTest'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
