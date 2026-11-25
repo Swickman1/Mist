@@ -6,13 +6,14 @@
   "description": "Offline-first catalog and launcher for locally owned games and shows.",
   "main": "out/main/index.js",
   "scripts": {
-    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/fetch-mpv.mjs --warn-only",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "icons": "node scripts/make-icons.mjs",
-    "dist": "node scripts/preflight-dist.mjs && npm run icons && electron-vite build && electron-builder --win nsis"
+    "dist": "node scripts/fetch-mpv.mjs && npm run icons && electron-vite build && electron-builder --win nsis",
+    "fetch-mpv": "node scripts/fetch-mpv.mjs"
   },
   "dependencies": {
     "better-sqlite3": "12.11.1",
