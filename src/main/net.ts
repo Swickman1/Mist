@@ -108,6 +108,9 @@ export async function httpFetch(
       current = new URL(location, current).href
       continue
     }
+    if (response.status >= 300 && response.status < 400 && !location) {
+      throw new Error(`redirect without a location from ${current} (HTTP ${response.status})`)
+    }
     return { response, url: current }
   }
   throw new Error(`too many redirects from ${new URL(url).hostname}`)

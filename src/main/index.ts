@@ -53,13 +53,13 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
     const url = new URL(details.url)
     const local = LOCAL_PROTOCOLS.includes(url.protocol)
     const devServer = devOrigin !== undefined && url.host === devOrigin.host && ['http:', 'ws:'].includes(url.protocol)
-    const metadata = url.protocol === 'https:' && hostAllowed(url.hostname, allowedHttpsHosts(downloadHosts()))
-    const embed = !local && !devServer && !metadata && embedAllowed(details, url)
+    const allowedHost = (url.protocol === 'https:' || url.protocol === 'http:') && hostAllowed(url.hostname, allowedHttpsHosts(downloadHosts()))
+    const embed = !local && !devServer && !allowedHost && embedAllowed(details, url)
     if (embed && !loggedEmbedHosts.has(url.hostname)) {
       loggedEmbedHosts.add(url.hostname)
       console.log(`[mist] frame host allowed: ${url.hostname}`)
     }
-    const allowed = local || devServer || metadata || embed
+    const allowed = local || devServer || allowedHost || embed
     if (!allowed) console.warn(`[mist] blocked network request: ${details.url}`)
     callback({ cancel: !allowed })
   })
