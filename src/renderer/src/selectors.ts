@@ -2,7 +2,7 @@
 import { RUNNING_STATES, VISIBLE_STATES, type DownloadJob, type Episode, type Game, type LibraryEntry, type Snapshot } from '../../shared/types'
 import { ui } from './config'
 
-export type TileState = 'ready' | 'downloading' | 'paused' | 'failed' | 'missing' | 'update'
+export type TileState = 'ready' | 'downloading' | 'paused' | 'failed' | 'missing' | 'update' | 'blocked'
 
 export function visibleJobs(jobs: DownloadJob[]): DownloadJob[] {
   return jobs.filter((job) => VISIBLE_STATES.includes(job.state)).sort((a, b) => a.createdAt - b.createdAt)
@@ -19,6 +19,7 @@ export function entryFor(snapshot: Snapshot, kind: LibraryEntry['kind'], refId: 
 export function tileState(entry: LibraryEntry, job: DownloadJob | undefined): TileState {
   if (job && job.state === 'paused') return 'paused'
   if (job && job.state === 'failed') return 'failed'
+  if (job && job.state === 'blocked_host') return 'blocked'
   if (job) return 'downloading'
   return entry.state
 }

@@ -64,9 +64,7 @@ export function useGameChip(game: Game, entry: LibraryEntry | undefined, job: Do
         event.stopPropagation()
         const allowed = await confirm({ title: 'Allow download host', message: `Allow downloads from ${host}?`, confirmLabel: 'Allow' })
         if (!allowed) return
-        const hosts = new Set(snapshot.settings.downloadHosts)
-        hosts.add(host)
-        notify(await api.setDownloadHosts([...hosts].join('\n')))
+        notify(await api.allowHost(host))
       }
     }
   }

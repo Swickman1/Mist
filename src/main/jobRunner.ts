@@ -74,7 +74,7 @@ export class JobRunner {
     const existing = this.repo.jobs.all().find((job) => job.gameId === gameId && VISIBLE_STATES.includes(job.state))
     if (existing) {
       if (existing.state === 'paused') this.resume(existing.id)
-      if (existing.state === 'failed') this.retry(existing.id)
+      if (existing.state === 'failed' || existing.state === 'blocked_host') this.retry(existing.id)
       return
     }
     const game = this.repo.games.get(gameId)!
@@ -91,6 +91,7 @@ export class JobRunner {
       createdAt: now
     })
     this.publish()
+    this.tick()
   }
 
   pause(jobId: string): void {
@@ -110,7 +111,7 @@ export class JobRunner {
 
   retry(jobId: string): void {
     const job = this.repo.jobs.get(jobId)
-    if (!job || !['failed', 'stalled', 'cancelled'].includes(job.state)) return
+    if (!job || !['failed', 'stalled', 'cancelled', 'blocked_host'].includes(job.state)) return
     this.repo.jobs.put({ ...job, state: 'queued', reason: undefined, speedBps: 0, attempts: job.attempts + 1 })
     this.publish()
   }

@@ -367,6 +367,26 @@ export class MistService implements MistCalls {
     return { ok: true, message: `${game.title} ${created ? 'added' : 'metadata updated'}${facts ? ` · ${facts}` : ''}` }
   }
 
+  async allowHost(host: string, jobId?: string): Promise<ActionResult> {
+    // Add host to download hosts list
+    const { downloadHosts } = this.repo.settings
+    if (!downloadHosts.includes(host)) {
+      this.repo.settings = { ...this.repo.settings, downloadHosts: [...downloadHosts, host] }
+    }
+
+    // If a job ID was provided, retry that specific job
+    if (jobId) {
+      const job = this.repo.jobs.get(jobId)
+      if (job && job.state === 'blocked_host') {
+        // Reset the job's state to queued and retry it
+        await this.runner.retry(job.id)
+        return { ok: true, message: `Host allowed and job ${jobId} retried` }
+      }
+    }
+
+    return { ok: true, message: `Host ${host} added to download allowlist` }
+  }
+
   async setDownloadHosts(text: string): Promise<ActionResult> {
     const result = normaliseHosts(text.split(/\r?\n/))
     if (!result.ok) return { ok: false, message: result.error }

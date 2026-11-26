@@ -165,6 +165,7 @@ export interface DownloadJob {
   reason?: string
   attempts: number
   createdAt: number
+  host?: string
 }
 
 /** States in which a job holds a download slot. */
@@ -315,6 +316,8 @@ export interface MistCalls {
   setLaunchAtLogin(enabled: boolean): void
   /** Opens an embed URL in the system browser (window.open is denied inside Mist). Only EMBED_HOSTS URLs. */
   openExternal(url: string): Promise<ActionResult>
+  /** Adds one host to the download allowlist and retries the blocked job. */
+  allowHost(host: string, jobId?: string): Promise<ActionResult>
 }
 
 export type MistMethod = keyof MistCalls
@@ -359,6 +362,7 @@ export const MIST_METHODS = [
   'steamSearch',
   'addGameFromSteam',
   'refreshGameMetadata',
+  'allowHost',
   'setDownloadHosts',
   'suggestedDownloadHosts'
 ] as const satisfies readonly MistMethod[]
