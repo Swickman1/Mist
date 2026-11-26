@@ -90,28 +90,16 @@ export async function httpFetch(
   request: HttpRequest,
   context: HttpContext
 ): Promise<{ response: Response; url: string }> {
-  let current = url
-  for (let hop = 0; hop <= NET_CONFIG.maxRedirects; hop++) {
-    checkHost(current, context.hosts())
-    const headers: Record<string, string> = { 'User-Agent': context.userAgent, ...request.headers }
-    if (request.referer) headers['Referer'] = request.referer
-    if (request.rangeFrom !== undefined) headers['Range'] = `bytes=${request.rangeFrom}-${request.rangeTo ?? ''}`
-    const response = await context.session.fetch(current, {
-      method: request.method ?? 'GET',
-      headers,
-      redirect: 'manual',
-      signal: request.signal ?? AbortSignal.timeout(NET_CONFIG.timeoutMs)
-    })
-    const location = response.headers.get('location')
-    if (response.status >= 300 && response.status < 400 && location) {
-      await response.body?.cancel()
-      current = new URL(location, current).href
-      continue
-    }
-    if (response.status >= 300 && response.status < 400 && !location) {
-      throw new Error(`redirect without a location from ${current} (HTTP ${response.status})`)
-    }
-    return { response, url: current }
-  }
-  throw new Error(`too many redirects from ${new URL(url).hostname}`)
+  checkHost(url, context.hosts())
+  const headers: Record<string, string> = { 'User-Agent': context.userAgent, ...request.headers }
+  if (request.referer) headers['Referer'] = request.referer
+  if (request.rangeFrom !== undefined) headers['Range'] = `bytes=${request.rangeFrom}-${request.rangeTo ?? ''}`
+  const response = await context.session.fetch(url, {
+    method: request.method ?? 'GET',
+    headers,
+    redirect: 'follow',
+    signal: request.signal ?? AbortSignal.timeout(NET_CONFIG.timeoutMs)
+  })
+  checkHost(response.url, context.hosts())
+  return { response, url: response.url }
 }

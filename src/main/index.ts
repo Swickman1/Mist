@@ -50,6 +50,11 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
   const devOrigin = devServerUrl ? new URL(devServerUrl) : undefined
   const loggedEmbedHosts = new Set<string>()
   appSession.webRequest.onBeforeRequest((details, callback) => {
+    // Main-process requests are allowed outright; they're already vetted by checkHost.
+    if (details.webContentsId === undefined || details.webContentsId === -1) {
+      callback({ cancel: false })
+      return
+    }
     const url = new URL(details.url)
     const local = LOCAL_PROTOCOLS.includes(url.protocol)
     const devServer = devOrigin !== undefined && url.host === devOrigin.host && ['http:', 'ws:'].includes(url.protocol)
