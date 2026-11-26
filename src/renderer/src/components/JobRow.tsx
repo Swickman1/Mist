@@ -12,7 +12,8 @@ const STATE_LABEL: Record<DownloadJob['state'], string> = {
   paused: 'Paused',
   stalled: 'Stalled',
   failed: 'Failed',
-  cancelled: 'Cancelled'
+  cancelled: 'Cancelled',
+  blocked_host: 'HOST BLOCKED'
 }
 
 export function JobStatus({ job }: { job: DownloadJob }) {

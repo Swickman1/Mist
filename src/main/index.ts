@@ -196,26 +196,80 @@ app.whenReady().then(async () => {
   })
 
   /** Allow a host to be used for downloads. */
-  ipcMain.handle('mist:allowHost', async (_event, host: string, jobId?: string) => {
-    // Validate the host
-    const result = normaliseHosts([host])
-    if (!result.ok) throw new Error(result.error)
+  app.whenReady().then(async () => {
+    const appSession = session.fromPartition(APP_PARTITION)
     
-    // Add to download hosts in settings
+    // mpv processes left by a crash or hard kill of the previous run.
+    const mpvPids = new MpvPidFile(join(app.getPath('userData'), 'mpv-pids.json'))
+    const swept = mpvPids.sweep()
+    if (swept.length) console.warn(`[mist] killed stale mpv processes: ${swept.join(', ')}`)
+
     const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
-    const currentSettings = repo.settings
-    if (!currentSettings.downloadHosts.includes(host)) {
-      currentSettings.downloadHosts.push(host)
-      repo.updateSettings(currentSettings)
-    }
-    
-    // If a jobId is provided, retry that job
-    if (jobId) {
-      try {
-        runner.retryJob(jobId)
-      } catch (error) {
-        console.warn(`[mist] failed to retry job ${jobId}:`, error)
+    // The session guard reads the download hosts live, so Settings edits apply at once.
+    blockNetwork(appSession, () => repo.settings.downloadHosts)
+    identifyEmbedFrames(appSession)
+    const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
+    /** Allowlist (read live from settings) + User-Agent for every URL source. */
+    const http = { hosts: () => repo.settings.downloadHosts, session: appSession, userAgent: `Mist/${app.getVersion()}` }
+    const runner = new JobRunner(
+      repo,
+      (game, stagingDir, signal) => installGame(game, stagingDir, repo.settings.libraryPath, signal),
+      (jobs) => broadcast(IPC.jobs, jobs),
+      () => broadcast(IPC.snapshot, service.snapshot()),
+      http
+    )
+    const mpv = new MpvHost(() => mainWindow, () => repo.settings.hardwareDecode, (event) => broadcast(IPC.player, event), mpvPids)
+    const tmdbCache = new ArtCache(app.getPath('userData'), 'tmdb-cache', 'tmdb', TMDB_CONFIG.imageBase)
+    const steamCache = new ArtCache(app.getPath('userData'), 'steam-cache', 'steam', STEAM_CONFIG.imageBase)
+    const service: MistService = new MistService(
+      repo,
+      runner,
+      app.getVersion(),
+      () => mainWindow,
+      mpv,
+      () => broadcast(IPC.snapshot, service.snapshot()),
+      tmdbCache,
+      steamCache,
+      http
+    )
+
+    await service.importBundledIndex()
+
+    ipcMain.handle(IPC.call, async (_event, method: MistMethod, args: unknown[]) => {
+      if (!MIST_METHODS.includes(method)) throw new Error(`Unknown method ${method}`)
+      const result = await (service[method] as (...a: unknown[]) => unknown)(...args)
+      if (!READ_ONLY_METHODS.includes(method)) broadcast(IPC.snapshot, service.snapshot())
+      return result
+    })
+
+    /** Allow a host to be used for downloads. */
+    ipcMain.handle('mist:allowHost', async (_event, host: string, jobId?: string) => {
+      // Validate the host
+      const result = normaliseHosts([host])
+      if (!result.ok) throw new Error(result.error)
+      
+      // Add to download hosts in settings
+      const currentSettings = repo.settings
+      if (!currentSettings.downloadHosts.includes(host)) {
+        currentSettings.downloadHosts.push(host)
+        repo.settings = currentSettings
       }
-    }
+      
+      // If a jobId is provided, retry that job
+      if (jobId) {
+        try {
+          runner.retry(jobId)
+        } catch (error: unknown) {
+          console.warn(`[mist] failed to retry job ${jobId}:`, error)
+        }
+      }
+    })
+
+    reconcileInstalled(repo)
+    migrateRemoteArt(repo)
+    migrateRemoteSteamArt(repo)
+    handleMediaRequests(repo, { tmdb: tmdbCache, steam: steamCache }, appSession)
+    void indexAllShows(repo).then((changed) => changed && broadcast(IPC.snapshot, service.snapshot()))
+    runner.start()
+    mainWindow = createWindow(repo.settings.theme)
   })
-})

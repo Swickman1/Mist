@@ -8,7 +8,8 @@ import { resolverFor } from '../sources'
 import { sha256File } from '../verify'
 import type { Repository } from './repository'
 import type { HttpContext } from './net'
-import { clearStaging, isUrlPart, Transfer, type TransferPhase, HostNotAllowedError } from './transfer'
+import { clearStaging, isUrlPart, Transfer, type TransferPhase } from './transfer'
+import { HostNotAllowedError } from './net'
 
 const TICK_MS = 500
 /** Weight of the newest speed sample in the smoothed speed. */
@@ -209,8 +210,8 @@ export class JobRunner {
         stagingDir,
         manifest.parts,
         {
-          onBytes: (bytes) => (live.bytesDone = bytes),
-          onPhase: (phase, detail) => this.set(job.id, { state: PHASE_STATE[phase], reason: phase === 'stalled' ? detail : undefined })
+          onBytes: (bytes: number) => (live.bytesDone = bytes),
+          onPhase: (phase: TransferPhase, detail?: string) => this.set(job.id, { state: PHASE_STATE[phase], reason: phase === 'stalled' ? detail : undefined })
         },
         { http: this.http, referer: manifest.sourcePage }
       )
@@ -226,7 +227,7 @@ export class JobRunner {
       signal.throwIfAborted()
       this.markInstalled(game.id, installed)
       this.set(job.id, { state: 'ready' })
-    } catch (error) {
+    } catch (error: unknown) {
       if (signal.aborted || error instanceof Interrupted) return
       if (error instanceof HostNotAllowedError) {
         // Set job state to 'blocked_host' instead of failing the job
