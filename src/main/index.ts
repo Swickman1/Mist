@@ -133,7 +133,7 @@ app.whenReady().then(async () => {
   identifyEmbedFrames(appSession)
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
   /** Allowlist (read live from settings) + User-Agent for every URL source. */
-  const http = { hosts: () => repo.settings.downloadHosts, userAgent: `Mist/${app.getVersion()}` }
+  const http = { hosts: () => repo.settings.downloadHosts, session: appSession, userAgent: `Mist/${app.getVersion()}` }
   const runner = new JobRunner(
     repo,
     (game, stagingDir, signal) => installGame(game, stagingDir, repo.settings.libraryPath, signal),

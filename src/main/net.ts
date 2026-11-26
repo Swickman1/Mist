@@ -64,6 +64,8 @@ export function checkHost(url: string, hosts: readonly string[]): URL {
 export interface HttpContext {
   /** Current allowlist (read live, so Settings edits apply to the next request). */
   hosts: () => readonly string[]
+  /** Session that carries cookies/challenges for URL sources. */
+  session: Electron.Session
   userAgent: string
 }
 
@@ -83,14 +85,18 @@ export interface HttpRequest {
  * fetch with redirects followed by hand so every hop is re-checked against the
  * allowlist. Returns the final response and URL.
  */
-export async function httpFetch(url: string, request: HttpRequest, context: HttpContext): Promise<{ response: Response; url: string }> {
+export async function httpFetch(
+  url: string,
+  request: HttpRequest,
+  context: HttpContext
+): Promise<{ response: Response; url: string }> {
   let current = url
   for (let hop = 0; hop <= NET_CONFIG.maxRedirects; hop++) {
     checkHost(current, context.hosts())
     const headers: Record<string, string> = { 'User-Agent': context.userAgent, ...request.headers }
     if (request.referer) headers['Referer'] = request.referer
     if (request.rangeFrom !== undefined) headers['Range'] = `bytes=${request.rangeFrom}-${request.rangeTo ?? ''}`
-    const response = await fetch(current, {
+    const response = await context.session.fetch(current, {
       method: request.method ?? 'GET',
       headers,
       redirect: 'manual',

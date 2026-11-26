@@ -202,13 +202,14 @@ function isGithubRateLimit(response: Response, body: string): boolean {
 
 async function fetchGithubJson(apiPath: string, release: GithubReleaseRef, http: HttpContext): Promise<unknown> {
   const apiUrl = `https://api.github.com/repos/${release.owner}/${release.repo}/${apiPath}`
+  const githubHttp = withGithubApiHost(http)
   const { response, url: finalUrl } = await httpFetch(
     apiUrl,
     {
       headers: { Accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS)
     },
-    withGithubApiHost(http)
+    githubHttp
   )
   const body = await response.text()
   if (isGithubRateLimit(response, body)) throw new Error('blocked: GitHub API rate limit exceeded; retry in a minute')
