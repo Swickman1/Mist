@@ -50,23 +50,37 @@ export function useGameChip(game: Game, entry: LibraryEntry | undefined, job: Do
         }
       }
     }
+    if (state === 'blocked') {
+      return {
+        state,
+        label: 'ALLOW',
+        title: `Allow ${job?.host ?? job?.reason}`,
+        onClick: async (event) => {
+          event.stopPropagation()
+          const ok = await confirm({ title: 'Allow download host', message: `Allow downloads from ${job?.host ?? job?.reason}?`, confirmLabel: 'Allow' })
+          if (ok) notify(await api.allowHost(job!.host!, job!.id))
+        }
+      }
+    }
     if (state === 'missing' && !wasInstalled(entry)) return install
     return { state, label: state === 'downloading' && job ? `DOWNLOADING ${formatPercent(job.progress)}` : state.toUpperCase() }
   }
 
-  const host = game.origin === 'index' ? hostFor(game.source) : undefined
-  if (host && !hostAllowed(host, snapshot.settings.downloadHosts)) {
-    return {
-      state: 'blocked',
-      label: 'HOST BLOCKED',
-      title: `Allow ${host}`,
-      onClick: async (event) => {
-        event.stopPropagation()
-        const allowed = await confirm({ title: 'Allow download host', message: `Allow downloads from ${host}?`, confirmLabel: 'Allow' })
-        if (!allowed) return
-        notify(await api.allowHost(host))
-      }
-    }
-  }
+  const blockedHost = job?.host ?? (game.origin === 'index' ? hostFor(game.source) : undefined)
+  const allow: GameChip | undefined =
+    blockedHost && !hostAllowed(blockedHost, snapshot.settings.downloadHosts)
+      ? {
+          state: 'blocked',
+          label: 'ALLOW',
+          title: `Allow ${blockedHost}`,
+          onClick: async (event) => {
+            event.stopPropagation()
+            const ok = await confirm({ title: 'Allow download host', message: `Allow downloads from ${blockedHost}?`, confirmLabel: 'Allow' })
+            if (ok) notify(await api.allowHost(blockedHost, job?.id))
+          }
+        }
+      : undefined
+
+  if (allow) return allow
   return install
 }

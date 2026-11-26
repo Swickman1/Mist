@@ -17,6 +17,7 @@ const STATE_LABEL: Record<DownloadJob['state'], string> = {
 }
 
 export function JobStatus({ job }: { job: DownloadJob }) {
+  if (job.state === 'blocked_host') return <span className="text-amber">HOST BLOCKED · Allow {job.host ?? job.reason}</span>
   if (job.state === 'stalled') return <span className="text-amber">STALLED · {job.reason}</span>
   if (job.state === 'failed') return <span className="text-red">FAILED · {job.reason}</span>
   if (job.state === 'downloading') return <span className="muted">{formatSpeed(job.speedBps)}</span>
@@ -24,7 +25,7 @@ export function JobStatus({ job }: { job: DownloadJob }) {
 }
 
 export function JobRow({ job }: { job: DownloadJob }) {
-  const { snapshot } = useMist()
+  const { snapshot, notify } = useMist()
   return (
     <li className="job">
       <div className="job__main">
@@ -49,6 +50,11 @@ export function JobRow({ job }: { job: DownloadJob }) {
             Retry
           </button>
         )}
+        {job.state === 'blocked_host' && (
+          <button className="btn btn--primary btn--sm" onClick={() => void api.allowHost(job.host!, job.id).then(notify)}>
+            Allow
+          </button>
+        )}
         {job.state === 'paused' ? (
           <button className="btn btn--ghost btn--sm" onClick={() => api.resumeJob(job.id)}>
             Resume
@@ -56,13 +62,14 @@ export function JobRow({ job }: { job: DownloadJob }) {
         ) : (
           job.state !== 'failed' &&
           job.state !== 'ready' &&
-          job.state !== 'cancelled' && (
+          job.state !== 'cancelled' &&
+          job.state !== 'blocked_host' && (
             <button className="btn btn--ghost btn--sm" onClick={() => api.pauseJob(job.id)}>
               Pause
             </button>
           )
         )}
-        {job.state !== 'ready' && job.state !== 'cancelled' && (
+        {job.state !== 'ready' && job.state !== 'cancelled' && job.state !== 'blocked_host' && (
           <button className="btn btn--ghost btn--sm" onClick={() => api.cancelJob(job.id)}>
             Cancel
           </button>

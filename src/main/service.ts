@@ -369,9 +369,12 @@ export class MistService implements MistCalls {
 
   async allowHost(host: string, jobId?: string): Promise<ActionResult> {
     // Add host to download hosts list
+    const result = normaliseHosts([host])
+    if (!result.ok) return { ok: false, message: result.error }
+    const added = result.hosts[0]
     const { downloadHosts } = this.repo.settings
-    if (!downloadHosts.includes(host)) {
-      this.repo.settings = { ...this.repo.settings, downloadHosts: [...downloadHosts, host] }
+    if (!downloadHosts.includes(added)) {
+      this.repo.settings = { ...this.repo.settings, downloadHosts: [...downloadHosts, added] }
     }
 
     // If a job ID was provided, retry that specific job
@@ -384,7 +387,7 @@ export class MistService implements MistCalls {
       }
     }
 
-    return { ok: true, message: `Host ${host} added to download allowlist` }
+    return { ok: true, message: `Host ${added} added to download allowlist` }
   }
 
   async setDownloadHosts(text: string): Promise<ActionResult> {

@@ -309,7 +309,7 @@ export class Transfer {
     try {
       ;({ response } = await httpFetch(part.url, { rangeFrom: offset, referer: this.referer, signal }, this.http))
     } catch (error) {
-      if (error instanceof HostNotAllowedError) throw new TransferError('source_missing', error.message)
+      if (error instanceof HostNotAllowedError) throw error
       if (signal.aborted) throw error
       throw new TransferError('stalled', `could not connect for ${part.name}: ${(error as Error).message}`)
     }
