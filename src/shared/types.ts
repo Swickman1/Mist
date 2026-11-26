@@ -152,6 +152,7 @@ export type JobState =
   | 'stalled'
   | 'failed'
   | 'cancelled'
+  | 'blocked_host'
 
 export interface DownloadJob {
   id: string
@@ -169,7 +170,7 @@ export interface DownloadJob {
 /** States in which a job holds a download slot. */
 export const RUNNING_STATES: readonly JobState[] = ['resolving', 'downloading', 'verifying', 'extracting']
 /** States in which a job is shown in the download bar. */
-export const VISIBLE_STATES: readonly JobState[] = [...RUNNING_STATES, 'queued', 'paused', 'stalled', 'failed']
+export const VISIBLE_STATES: readonly JobState[] = [...RUNNING_STATES, 'queued', 'paused', 'stalled', 'failed', 'blocked_host']
 
 export interface SourceToggle {
   id: string

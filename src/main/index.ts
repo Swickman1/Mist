@@ -7,7 +7,7 @@ import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome
 import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
 import { MpvHost, MpvPidFile } from './mpv'
-import { hostAllowed } from './net'
+import { hostAllowed, normaliseHosts } from './net'
 import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media'
 import { migrateRemoteArt } from './metadata'
 import { Repository } from './repository'
@@ -191,6 +191,31 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+
+  /** Allow a host to be used for downloads. */
+  ipcMain.handle('mist:allowHost', async (_event, host: string, jobId?: string) => {
+    // Validate the host
+    const result = normaliseHosts([host])
+    if (!result.ok) throw new Error(result.error)
+    
+    // Add to download hosts in settings
+    const repo = new Repository(join(app.getPath('userData'), 'mist.db'), app.getPath('home'))
+    const currentSettings = repo.settings
+    if (!currentSettings.downloadHosts.includes(host)) {
+      currentSettings.downloadHosts.push(host)
+      repo.updateSettings(currentSettings)
+    }
+    
+    // If a jobId is provided, retry that job
+    if (jobId) {
+      try {
+        runner.retryJob(jobId)
+      } catch (error) {
+        console.warn(`[mist] failed to retry job ${jobId}:`, error)
+      }
+    }
+  })
 })

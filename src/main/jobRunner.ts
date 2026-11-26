@@ -8,7 +8,7 @@ import { resolverFor } from '../sources'
 import { sha256File } from '../verify'
 import type { Repository } from './repository'
 import type { HttpContext } from './net'
-import { clearStaging, isUrlPart, Transfer, type TransferPhase } from './transfer'
+import { clearStaging, isUrlPart, Transfer, type TransferPhase, HostNotAllowedError } from './transfer'
 
 const TICK_MS = 500
 /** Weight of the newest speed sample in the smoothed speed. */
@@ -228,7 +228,12 @@ export class JobRunner {
       this.set(job.id, { state: 'ready' })
     } catch (error) {
       if (signal.aborted || error instanceof Interrupted) return
-      this.set(job.id, { state: 'failed', speedBps: 0, reason: (error as Error).message })
+      if (error instanceof HostNotAllowedError) {
+        // Set job state to 'blocked_host' instead of failing the job
+        this.set(job.id, { state: 'blocked_host', speedBps: 0, reason: `Host not allowed: ${error.host}` })
+      } else {
+        this.set(job.id, { state: 'failed', speedBps: 0, reason: (error as Error).message })
+      }
     } finally {
       this.live.delete(job.id)
     }
