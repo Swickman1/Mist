@@ -54,7 +54,6 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
   const devOrigin = devServerUrl ? new URL(devServerUrl) : undefined
   const loggedEmbedHosts = new Set<string>()
   appSession.webRequest.onBeforeRequest((details, callback) => {
-    if (details.url.includes('megadb')) log(`guard ${details.resourceType} id=${details.webContentsId} ${details.url}`)
     
     // Main-process requests are allowed outright; they're already vetted by checkHost.
     if (details.webContentsId === undefined || details.webContentsId === -1) {
@@ -82,7 +81,6 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
     if (!allowed) {
       log(`blocked ${details.url} id=${details.webContentsId} type=${details.resourceType}`)
     }
-    if (details.url.includes('megadb')) log(`=> ${allowed ? 'allow' : 'block'}`)
     callback({ cancel: !allowed })
   })
 }
@@ -156,7 +154,6 @@ app.whenReady().then(async () => {
   
   // A lander page may navigate straight to the file instead of fetching it.
   appSession.on('will-download', (event, item, contents) => {
-    log(`will-download lander=${isLander()} ${item.getURL()}`)
     if (!isLander()) return
     event.preventDefault()
     noteLanderRequest(item.getURL())

@@ -2,7 +2,9 @@ node_modules
 out
 dist
 *.log
-# vendor/: only mpv's license and source note are tracked. mpv.exe (124.8 MB) exceeds
+probe-out/
+
+# vendor/: only mpv's license and source note are tracked. mpv's license and source note are tracked. mpv.exe (124.8 MB) exceeds
 # GitHub's 100 MB file limit, so it stays local (see vendor/mpv/SOURCE.md).
 vendor/*
 !vendor/mpv/
