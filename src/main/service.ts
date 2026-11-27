@@ -1,5 +1,6 @@
 // MistService: every renderer call lands here. Owns the repository and job runner.
 import { app, BrowserWindow, dialog, shell } from 'electron'
+import { resolveLander, log } from './lander'
 import { EMBED_HOSTS } from '../shared/embed'
 import { hostAllowed } from '../shared/hosts'
 import type {
@@ -168,6 +169,7 @@ export class MistService implements MistCalls {
   }
 
   install(gameId: string): void {
+    log(`install ${gameId}`)
     this.entryFor('game', gameId) ??
       this.repo.library.put({ id: `lib-${gameId}`, kind: 'game', refId: gameId, addedAt: Date.now(), playtimeSec: 0, state: 'missing' })
     this.runner.enqueue(gameId)
@@ -367,7 +369,12 @@ export class MistService implements MistCalls {
     return { ok: true, message: `${game.title} ${created ? 'added' : 'metadata updated'}${facts ? ` · ${facts}` : ''}` }
   }
 
-  async allowHost(host: string, jobId?: string): Promise<ActionResult> {
+  async allowHost(host: string | undefined, jobId?: string): Promise<ActionResult> {
+    // If no host provided, we can't do anything
+    if (!host) {
+      return { ok: false, message: 'No host provided' }
+    }
+
     // Add host to download hosts list
     const result = normaliseHosts([host])
     if (!result.ok) return { ok: false, message: result.error }
@@ -446,6 +453,16 @@ export class MistService implements MistCalls {
     if (parsed.protocol !== 'https:' || !hostAllowed(parsed.hostname, EMBED_HOSTS)) return { ok: false, message: `Not an embed URL: ${url}` }
     await shell.openExternal(parsed.href)
     return { ok: true, message: 'Opened in your browser' }
+  }
+
+  async probeLander(pageUrl: string): Promise<ActionResult> {
+    try {
+      const resolved = await resolveLander(pageUrl)
+      log(`resolved ${resolved.url}`)
+      return { ok: true, message: resolved.url }
+    } catch (error) {
+      return { ok: false, message: (error as Error).message }
+    }
   }
 
   async pickFolder(): Promise<string | null> {

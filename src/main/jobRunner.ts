@@ -4,6 +4,7 @@
 // The tick turns live byte counts into progress and speed.
 import { join } from 'node:path'
 import { RUNNING_STATES, VISIBLE_STATES, type DownloadJob, type Game, type JobState, type Manifest } from '../shared/types'
+import { log } from './lander'
 import { resolverFor } from '../sources'
 import { sha256File } from '../verify'
 import type { Repository } from './repository'
@@ -199,6 +200,7 @@ export class JobRunner {
   }
 
   private async run(job: DownloadJob): Promise<void> {
+    log(`run ${job.id} ${job.state}`)
     const live: LiveJob = { controller: new AbortController(), bytesDone: job.bytesDone, sampledBytes: job.bytesDone, sampledAt: Date.now() }
     this.live.set(job.id, live)
     const signal = live.controller.signal
@@ -229,10 +231,11 @@ export class JobRunner {
       this.markInstalled(game.id, installed)
       this.set(job.id, { state: 'ready' })
     } catch (error: unknown) {
+      log(`error ${job.id} ${(error as Error)?.constructor?.name} host=${JSON.stringify((error as HostNotAllowedError).host)} msg=${(error as Error)?.message}`)
       if (signal.aborted || error instanceof Interrupted) return
       if (error instanceof HostNotAllowedError) {
         // Set job state to 'blocked_host' instead of failing the job
-        this.set(job.id, { state: 'blocked_host', speedBps: 0, reason: `Host not allowed: ${error.host}` })
+        this.set(job.id, { state: 'blocked_host', speedBps: 0, host: error.host, reason: `Host not allowed: ${error.host}` })
       } else {
         this.set(job.id, { state: 'failed', speedBps: 0, reason: (error as Error).message })
       }

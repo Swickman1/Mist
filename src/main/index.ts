@@ -7,7 +7,10 @@ import { APP_ID, appIconPath, titleBarOverlay, windowBackground } from './chrome
 import { installGame, reconcileInstalled } from './install'
 import { JobRunner } from './jobRunner'
 import { MpvHost, MpvPidFile } from './mpv'
-import { hostAllowed } from './net'
+import { hostAllowed, type HttpContext } from './net'
+import { log } from './lander'
+
+log('boot')
 import { handleMediaRequests, indexAllShows, registerMediaScheme } from './media'
 import { migrateRemoteArt } from './metadata'
 import { Repository } from './repository'
@@ -16,10 +19,11 @@ import { ArtCache } from './artCache'
 import { migrateRemoteSteamArt } from './gameMetadata'
 import { STEAM_CONFIG } from './steam'
 import { TMDB_CONFIG } from './tmdb'
+import { isLander, LANDER_PARTITION, noteLanderRequest, noteLanderResponse, resolveLander } from './lander'
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 let mainWindow: BrowserWindow | undefined
-const APP_PARTITION = 'persist:mist'
+const APP_PARTITION = LANDER_PARTITION
 
 /** Local protocols Mist always serves from disk or memory. */
 const LOCAL_PROTOCOLS = ['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:', `${MEDIA_SCHEME}:`]
@@ -50,11 +54,21 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
   const devOrigin = devServerUrl ? new URL(devServerUrl) : undefined
   const loggedEmbedHosts = new Set<string>()
   appSession.webRequest.onBeforeRequest((details, callback) => {
+    if (details.url.includes('megadb')) log(`guard ${details.resourceType} id=${details.webContentsId} ${details.url}`)
+    
     // Main-process requests are allowed outright; they're already vetted by checkHost.
     if (details.webContentsId === undefined || details.webContentsId === -1) {
       callback({ cancel: false })
       return
     }
+    
+    // Lander windows are resolving a file host: let everything through and watch for the file.
+    if (isLander()) {
+      noteLanderRequest(details.url)
+      callback({ cancel: false })
+      return
+    }
+    
     const url = new URL(details.url)
     const local = LOCAL_PROTOCOLS.includes(url.protocol)
     const devServer = devOrigin !== undefined && url.host === devOrigin.host && ['http:', 'ws:'].includes(url.protocol)
@@ -65,7 +79,10 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
       console.log(`[mist] frame host allowed: ${url.hostname}`)
     }
     const allowed = local || devServer || allowedHost || embed
-    if (!allowed) console.warn(`[mist] blocked network request: ${details.url}`)
+    if (!allowed) {
+      log(`blocked ${details.url} id=${details.webContentsId} type=${details.resourceType}`)
+    }
+    if (details.url.includes('megadb')) log(`=> ${allowed ? 'allow' : 'block'}`)
     callback({ cancel: !allowed })
   })
 }
@@ -77,7 +94,7 @@ function blockNetwork(appSession: Electron.Session, downloadHosts: () => readonl
 function identifyEmbedFrames(appSession: Electron.Session): void {
   appSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const frame = details.resourceType === 'subFrame' && hostAllowed(new URL(details.url).hostname, EMBED_HOSTS)
-    callback({ requestHeaders: frame ? { ...details.requestHeaders, Referer: 'https://bingeapi.st/' } : details.requestHeaders })
+    callback(details.requestHeaders ? { requestHeaders: frame ? { ...details.requestHeaders, Referer: 'https://steamrip.com/' } : details.requestHeaders } : {})
   })
 }
 
@@ -136,9 +153,27 @@ app.whenReady().then(async () => {
   // The session guard reads the download hosts live, so Settings edits apply at once.
   blockNetwork(appSession, () => repo.settings.downloadHosts)
   identifyEmbedFrames(appSession)
+  
+  // A lander page may navigate straight to the file instead of fetching it.
+  appSession.on('will-download', (event, item, contents) => {
+    log(`will-download lander=${isLander()} ${item.getURL()}`)
+    if (!isLander()) return
+    event.preventDefault()
+    noteLanderRequest(item.getURL())
+  })
+  
+  appSession.webRequest.onHeadersReceived((details, callback) => {
+    noteLanderResponse(details.url, (details.responseHeaders ?? {}) as Record<string, string[]>)
+    callback(details.responseHeaders ? { responseHeaders: details.responseHeaders } : {})
+  })
   const broadcast = (channel: string, payload: unknown) => mainWindow?.webContents.send(channel, payload)
   /** Allowlist (read live from settings) + User-Agent for every URL source. */
-  const http = { hosts: () => repo.settings.downloadHosts, session: appSession, userAgent: `Mist/${app.getVersion()}` }
+  const http: HttpContext = {
+    hosts: () => repo.settings.downloadHosts,
+    session: appSession,
+    userAgent: `Mist/${app.getVersion()}`,
+    resolveLander
+  }
   const runner = new JobRunner(
     repo,
     (game, stagingDir, signal) => installGame(game, stagingDir, repo.settings.libraryPath, signal),

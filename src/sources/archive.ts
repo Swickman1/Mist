@@ -5,6 +5,7 @@ import { basename, dirname, join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Part } from '../shared/types'
 import { checkHost, hostAllowed, httpFetch, type HttpContext } from '../main/net'
+import { isLanderHost, log, resolveLander } from '../main/lander'
 import type { Resolver, SourceEntry } from './index'
 
 /** Archive files, including split volumes: .partN.rar, .rNN and .001-style. */
@@ -330,10 +331,21 @@ function manifestParts(json: unknown, base: string, http: HttpContext): Part[] {
 
 /** Archive anchors on a page (or a manifest JSON) -> URL parts, in volume order, with sidecar sha256s. */
 export async function resolveUrl(input: string, http: HttpContext | undefined): Promise<Part[]> {
+  log(`resolveUrl ${input}`)
   if (!http) throw new Error('URL sources need the download settings (internal: no HTTP context)')
   const source = new URL(input.trim())
   const githubParts = await githubReleaseParts(source, http)
   if (githubParts) return githubParts
+
+  if (isLanderHost(source.hostname)) {
+    const resolved = await resolveLander(source.href)
+    const resolvedUrl = resolved.url
+    const name = resolved.name ?? decodeURIComponent(new URL(resolvedUrl).pathname.split('/').pop() ?? '')
+    log(`lander ${source.href} -> ${resolvedUrl}${resolved.name ? ` as ${resolved.name}` : ''}`)
+    if (!ARCHIVE_PATTERN.test(name)) throw new Error(`the file host sent ${resolvedUrl}, which is not an archive`)
+    checkHost(resolvedUrl, http.hosts())
+    return [{ name, sizeBytes: await remoteSize(resolvedUrl, http, source.href), url: resolvedUrl, index: 0 }]
+  }
 
   const page = await fetchText(source.href, http, undefined, /\.json$/i.test(source.pathname) ? 'default' : 'html-page')
   if (/\.json$/i.test(new URL(page.url).pathname) || /json/i.test(page.type)) {

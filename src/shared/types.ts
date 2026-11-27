@@ -313,11 +313,13 @@ export interface MistCalls {
   setDownloadHosts(text: string): Promise<ActionResult>
   /** The built-in suggestions for the allowlist. */
   suggestedDownloadHosts(): Promise<string[]>
+  /** Adds one host to the download allowlist and retries the blocked job. */
+  allowHost(host: string | undefined, jobId?: string): Promise<ActionResult>
   setLaunchAtLogin(enabled: boolean): void
   /** Opens an embed URL in the system browser (window.open is denied inside Mist). Only EMBED_HOSTS URLs. */
   openExternal(url: string): Promise<ActionResult>
-  /** Adds one host to the download allowlist and retries the blocked job. */
-  allowHost(host: string, jobId?: string): Promise<ActionResult>
+  /** Dev tool: resolves a file-host landing page to its file URL in a hidden window. */
+  probeLander(pageUrl: string): Promise<ActionResult>
 }
 
 export type MistMethod = keyof MistCalls
@@ -364,7 +366,8 @@ export const MIST_METHODS = [
   'refreshGameMetadata',
   'allowHost',
   'setDownloadHosts',
-  'suggestedDownloadHosts'
+  'suggestedDownloadHosts',
+  'probeLander'
 ] as const satisfies readonly MistMethod[]
 
 // Compile-time check that MIST_METHODS lists every MistCalls method.
@@ -372,7 +375,7 @@ type MissingMethods = Exclude<MistMethod, (typeof MIST_METHODS)[number]>
 export const ALL_METHODS_LISTED: MissingMethods extends never ? true : never = true
 
 /** Methods that only read; every other call is followed by a snapshot broadcast. */
-export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'tmdbDiscover', 'tmdbGenres', 'steamSearch', 'suggestedDownloadHosts', 'openExternal']
+export const READ_ONLY_METHODS: readonly MistMethod[] = ['snapshot', 'pickFolder', 'playerOpen', 'playerBounds', 'playerClose', 'playerKey', 'tmdbTest', 'tmdbSearch', 'tmdbDiscover', 'tmdbGenres', 'steamSearch', 'suggestedDownloadHosts', 'openExternal', 'probeLander']
 
 export const IPC = {
   call: 'mist:call',

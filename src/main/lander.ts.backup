@@ -1,0 +1,144 @@
+// Resolves a file-host landing page to a real file URL by running its page in a
+// hidden window on the app partition. Hosts gate the file behind WASM or a
+// challenge, so the URL does not exist until their script has run.
+import { BrowserWindow } from 'electron'
+import { appendFileSync, mkdirSync } from 'node:fs'
+
+export const LANDER_PARTITION = 'persist:mist'
+const LANDER_TIMEOUT_MS = 45_000
+const FILE_PATTERN = /\.(zip|rar|7z|iso|exe|bin)(\?|$)/i
+
+export function log(line: string): void {
+  try {
+    mkdirSync('probe-out', { recursive: true })
+    appendFileSync('probe-out/lander.log', `${new Date().toISOString()} ${line}\n`)
+  } catch {
+    // logging must never break a resolve
+  }
+}
+
+export class LanderError extends Error {}
+
+interface PendingLander {
+  /** pathname+search of the page itself, ignored as a match. */
+  pageKey: string
+  onFile(url: string): void
+}
+
+/** Only one lander window may be resolving at once. */
+let active: PendingLander | undefined
+
+export function isLander(): boolean {
+  return active !== undefined
+}
+
+function keyOf(url: string): string | undefined {
+  try {
+    const parsed = new URL(url)
+    return parsed.pathname + parsed.search
+  } catch {
+    return undefined
+  }
+}
+
+/** Called by the session guard for every request a lander window makes. */
+export function noteLanderRequest(url: string): void {
+  if (!active || !FILE_PATTERN.test(url)) return
+  log(`req ${url}`)
+  if (keyOf(url) === active.pageKey) return
+  active.onFile(url)
+}
+
+/** Called from onHeadersReceived: the file may come back without an archive extension. */
+export function noteLanderResponse(url: string, headers: Record<string, string[]>): void {
+  if (!active || keyOf(url) === active.pageKey) return
+  log(`res ${url}`)
+  const disposition = (headers['Content-Disposition'] ?? headers['content-disposition'] ?? []).join(' ')
+  const type = (headers['Content-Type'] ?? headers['content-type'] ?? []).join(' ')
+  if (!/attachment/i.test(disposition) && !/octet-stream|zip|rar|7z|x-iso|x-msdownload/i.test(type)) return
+  active.onFile(url)
+}
+
+export function isLanderHost(hostname: string): boolean {
+  const LANDER_HOSTS = [
+    'steamrip.com',
+    'megadb.net',
+    'bzzhr.to',
+    'itsfileditchfiles.st',
+    'fileditch.com',
+    'gofile.io',
+    '1fichier.com',
+    'filecrypt.cc',
+    'getintopc.com',
+    'gamedownloadfree.com'
+  ]
+  return LANDER_HOSTS.includes(hostname)
+}
+
+export async function resolveLander(pageUrl: string): Promise<string> {
+  log(`start ${pageUrl}`)
+  if (active !== undefined) throw new LanderError('another lander is still resolving')
+  
+  const win = new BrowserWindow({
+    show: true,
+    width: 1280,
+    height: 800,
+    webPreferences: { partition: LANDER_PARTITION, sandbox: true, contextIsolation: true, backgroundThrottling: false }
+  })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
+  return new Promise<string>((resolve, reject) => {
+    let settled = false
+    const finish = (url?: string, error?: Error): void => {
+      log(`finish ${url ?? 'none'}`)
+      if (settled) return
+      settled = true
+      active = undefined
+      clearTimeout(timer)
+      clearInterval(poll)
+      if (!win.isDestroyed()) win.destroy()
+      if (url) resolve(url)
+      else reject(error ?? new LanderError(`could not resolve ${pageUrl}`))
+    }
+    const timer = setTimeout(() => finish(undefined, new LanderError(`timed out resolving ${pageUrl}`)), LANDER_TIMEOUT_MS)
+    
+    let polls = 0
+    const poll = setInterval(() => {
+      polls += 1
+      void win.webContents
+        .executeJavaScript(`(() => {
+          const span = document.getElementById('tc5a32eed1f')
+          const html = span ? span.innerHTML : ''
+          const anchor = [...document.querySelectorAll('a[href]')].find((a) => /\\.(zip|rar|7z|iso|exe)(\\?|$)/i.test(a.href))
+          if (anchor) return anchor.href
+          const inline = html.match(/href=["']([^"']+)["']/i)
+          return inline ? new URL(inline[1], location.href).href : null
+        })()`)
+        .then((found) => {
+          log(`poll ${polls}: ${typeof found === 'string' ? found : 'nothing'}`)
+          if (typeof found === 'string' && found) finish(found)
+        })
+        .catch((error) => log(`poll ${polls} failed: ${(error as Error).message}`))
+    }, 1_000)
+    
+    active = { pageKey: keyOf(pageUrl) ?? '', onFile: (url) => finish(url) }
+    win.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
+      if (code === -3 || !isMainFrame) return
+      finish(undefined, new LanderError(`${pageUrl} failed to load: ${description} (${code})`))
+    })
+    void win.loadURL(pageUrl, { httpReferrer: 'https://steamrip.com/' })
+    
+    setTimeout(() => {
+      void win.webContents
+        .executeJavaScript('document.documentElement.outerHTML')
+        .then((html) => {
+          // Ensure probe-out directory exists before writing
+          const fs = require('node:fs')
+          fs.mkdirSync('probe-out', { recursive: true })
+          fs.writeFileSync('probe-out/lander-dom.html', html)
+          log('dom dumped')
+        })
+        .catch((error) => log(`dom dump failed: ${(error as Error).message}`))
+    }, 25_000)
+  })
+}

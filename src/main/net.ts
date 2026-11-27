@@ -2,6 +2,8 @@
 // bypasses the renderer's session guard, so checkHost() is the only thing that
 // stops an arbitrary URL: every request and every redirect hop goes through it.
 import { hostAllowed } from '../shared/hosts'
+import { log } from './lander'
+import type { ResolvedFile } from './lander'
 export { hostAllowed } from '../shared/hosts'
 
 /** Offered by Settings → "Add suggested hosts": freely downloadable, official sources. */
@@ -67,6 +69,8 @@ export interface HttpContext {
   /** Session that carries cookies/challenges for URL sources. */
   session: Electron.Session
   userAgent: string
+  /** Resolves a file-host landing page to a real file URL. */
+  resolveLander?: (url: string) => Promise<ResolvedFile>
 }
 
 export interface HttpRequest {
@@ -94,12 +98,27 @@ export async function httpFetch(
   const headers: Record<string, string> = { 'User-Agent': context.userAgent, ...request.headers }
   if (request.referer) headers['Referer'] = request.referer
   if (request.rangeFrom !== undefined) headers['Range'] = `bytes=${request.rangeFrom}-${request.rangeTo ?? ''}`
-  const response = await context.session.fetch(url, {
-    method: request.method ?? 'GET',
-    headers,
-    redirect: 'follow',
-    signal: request.signal ?? AbortSignal.timeout(NET_CONFIG.timeoutMs)
-  })
-  checkHost(response.url, context.hosts())
+  let response: Response
+  try {
+    response = await context.session.fetch(url, {
+      method: request.method ?? 'GET',
+      headers,
+      redirect: 'follow',
+      signal: request.signal ?? AbortSignal.timeout(NET_CONFIG.timeoutMs)
+    })
+  } catch (error) {
+    if ((error as Error).message.includes('ERR_BLOCKED_BY_CLIENT')) {
+      try {
+        const direct = await fetch(url, { method: request.method ?? 'GET', headers, redirect: 'follow', signal: request.signal ?? AbortSignal.timeout(NET_CONFIG.timeoutMs) })
+        log(`session fetch blocked, used plain fetch ${url} -> ${direct.status}`)
+        return { response: direct, url: direct.url || url }
+      } catch {
+        // fall through to the original error
+      }
+    }
+    log(`fetch failed ${url} hosts=${context.hosts().join(',')} :: ${(error as Error).message}`)
+    throw error
+  }
+  if (response.url) checkHost(response.url, context.hosts())
   return { response, url: response.url }
 }
